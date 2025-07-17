@@ -1,5 +1,6 @@
 import streamlit as st
-from tree_plots import load_data, process_data, plot_data, assign_colors
+from tree_plots import load_data, plot_data, assign_colors
+from statistics_1 import diversity_plot
 import pandas as pd 
 
 DIAMETER_COL = "DBH"
@@ -20,12 +21,28 @@ if uploaded_file is not None:
     if df is not None:
         try:
             colors = assign_colors(df[SPECIES_COL].unique())
-            plot_data(df, colors)
+            fn = plot_data(df, colors)
+            
+            
+            species_counts = df["Species"].value_counts().sort_values(ascending=False)
+            with st.sidebar:
+                with open(fn, "rb") as img:
+                    btn = st.download_button(
+                        label="Download Graph",
+                        data=img,
+                        file_name=fn,
+                        on_click = "ignore",
+                        mime="image/png"
+                    )
+                st.write("Graphs:")
+                diversity_plot(species_counts)
+            
+
+
         except Exception as e:
             st.error(f"Error during plotting: {e}. Refer to the troubleshooting section")
     else:
-        st.warning("Data could not be loaded.")
-
+        st.warning("Data could not be loaded. Check integrity of file")
 
 
 
@@ -43,8 +60,8 @@ example_data = {
 }
 
 
-
 dfex = pd.DataFrame(example_data)
-if st.checkbox("Troubleshooting:"):
+with st.expander("Troubleshooting"):
     st.write("CSV must contain columns in order as below:")
     st.dataframe(dfex.set_index(dfex.columns[0]))
+

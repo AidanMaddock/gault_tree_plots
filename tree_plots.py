@@ -45,13 +45,7 @@ def assign_colors(species_list):
     color_cycle = (c for c in color_cycle if c not in used)
     return defaultdict(lambda: next(color_cycle), known_species_colors)
 
-def process_data(data,species):
-    data4 = [(*point, label) for point, label in zip(data, species)] 
-    x_coords = [x for x, y, dbh, sp in data4]
-    y_coords = [y for x, y, dbh, sp in data4]
-    dbh_list = [dbh * 3 for x, y, dbh, sp in data4]
-    species_list = [sp for x, y, dbh, sp in data4]
-    return (x_coords,y_coords,dbh_list,species_list)
+
 
 def plot_data(df, species_colors):
     fig, ax = plt.subplots(figsize=(8, 7))
@@ -80,5 +74,11 @@ def plot_data(df, species_colors):
     ax.legend(title="Species", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     st.pyplot(fig)
+    fn = 'tree_plot.png'
+
+    # Prepare figure for download
+    plt.savefig(fn)
+    return fn
+
 
 
