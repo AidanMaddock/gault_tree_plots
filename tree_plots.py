@@ -39,7 +39,7 @@ def assign_colors(species_list):
     "OV": "olive",
     "AR": "lightpink",
     "AA": "peru",
-    "FA": "black"}  # your existing map
+    "FA": "black"}  
     color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
     used = set(known_species_colors.values())
     color_cycle = (c for c in color_cycle if c not in used)
