@@ -4,10 +4,11 @@ import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 import io
 import streamlit as st 
-
+from collections import defaultdict
+import itertools
 
 # Plotting Constants
-species_colors = {
+known_species_colors = {
     "QR": "green",
     "TC": "blue",
     "AP": "orange",
@@ -20,18 +21,13 @@ species_colors = {
     "FA": "black"
 }
 
-species_markers = {
-    "QR": "o",   
-    "TC": "o",   
-    "AP": "o",  
-    "PR": "o",   
-    "FG": "o",   
-    "AS": "o", 
-    "OV": "o",
-    "AR": "o",
-    "AA": "o",
-    "FA": "o"
-}
+species_markers = defaultdict(lambda: "o")
+color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+used_colors = set(known_species_colors.values())
+color_cycle = (c for c in color_cycle if c not in used_colors)
+
+species_colors = defaultdict(lambda: next(color_cycle), known_species_colors)
+
 
 def load_data(filelike):
     data3 = []
