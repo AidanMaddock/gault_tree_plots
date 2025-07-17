@@ -1,0 +1,2 @@
+def diversity(data):
+    pass

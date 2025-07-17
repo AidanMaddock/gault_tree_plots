@@ -6,9 +6,30 @@ import io
 import streamlit as st 
 from collections import defaultdict
 import itertools
+import pandas as pd
 
 # Plotting Constants
-known_species_colors = {
+
+
+DIAMETER_COL = "DBH"
+SPECIES_COL = "Species"
+OUTPUT_PATH = "output.png"
+
+
+def load_data(filelike):
+    if filelike is not None:
+        try:
+            df = pd.read_csv(filelike)
+            st.success("File successfully uploaded and read.")
+            return df
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+            return None
+
+    return None
+
+def assign_colors(species_list):
+    known_species_colors = {
     "QR": "green",
     "TC": "blue",
     "AP": "orange",
@@ -18,31 +39,11 @@ known_species_colors = {
     "OV": "olive",
     "AR": "lightpink",
     "AA": "peru",
-    "FA": "black"
-}
-
-species_markers = defaultdict(lambda: "o")
-color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-used_colors = set(known_species_colors.values())
-color_cycle = (c for c in color_cycle if c not in used_colors)
-
-species_colors = defaultdict(lambda: next(color_cycle), known_species_colors)
-
-
-def load_data(filelike):
-    data3 = []
-    species_labels = []
-
-    text = io.StringIO(filelike.read().decode("utf-8"))
-    
-    next(text)
-    for row in text: 
-        data = row.strip().split(",")
-        if data[3] and data[4] and data[7]:
-            data3.append((float(data[3]),float(data[4]),float(data[7])))
-        species_labels.append(str(data[5]).strip())
-
-    return data3,species_labels
+    "FA": "black"}  # your existing map
+    color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    used = set(known_species_colors.values())
+    color_cycle = (c for c in color_cycle if c not in used)
+    return defaultdict(lambda: next(color_cycle), known_species_colors)
 
 def process_data(data,species):
     data4 = [(*point, label) for point, label in zip(data, species)] 
@@ -52,21 +53,12 @@ def process_data(data,species):
     species_list = [sp for x, y, dbh, sp in data4]
     return (x_coords,y_coords,dbh_list,species_list)
 
-def plot_data(processed_data):
-    x_coords, y_coords, dbh_list, species_list = processed_data
-    fig, ax = plt.subplots(figsize=(7, 7))
-    for sp in set(species_list):
-        xs = [x for x, s in zip(x_coords, species_list) if s == sp]
-        ys = [y for y, s in zip(y_coords, species_list) if s == sp]
-        sizes = [dbh for dbh, s in zip(dbh_list, species_list) if s == sp]
-        ax.scatter(xs, ys,
-                c=species_colors.get(sp, "grey"),
-                marker=species_markers.get(sp, "o"),
-                s=sizes,
-                label=sp,
-                edgecolors='black', linewidth=0.5)
-
-
+def plot_data(df, species_colors):
+    fig, ax = plt.subplots(figsize=(8, 7))
+    for sp, group in df.groupby(SPECIES_COL):
+        ax.scatter(group["X"], group["Y"], s=group[DIAMETER_COL] * 3, 
+                   c=species_colors[sp], label=sp, marker='o', alpha = 0.8)
+    ax.legend()
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.axvline(x=10, color='red', linestyle='-', linewidth=1)
     ax.axhline(y=10, color='red', linestyle='-', linewidth=1)
@@ -80,17 +72,13 @@ def plot_data(processed_data):
 
     dbh_sizes = [5, 15, 30, 45]  
     marker_sizes = [dbh * 3 for dbh in dbh_sizes]
-
-
-    scale_handles = [
-        plt.scatter([], [], s=size, c='gray', edgecolors='black', label=f"{dbh} cm")
-        for size, dbh in zip(marker_sizes, dbh_sizes)
+    dbh_handles = [
+        plt.scatter([], [], s=size, color='gray', label=f"{dbh} cm", alpha=0.6)
+        for dbh, size in zip(dbh_sizes, marker_sizes)
     ]
+
     ax.legend(title="Species", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     st.pyplot(fig)
 
 
-#load_data("/Users/aidanmaddock/Downloads/2025_Bioplot_Data(5 Hemlock Knoll).csv")
-#processed_data = process_data(data3, species_labels)
-#plot_data(processed_data)
