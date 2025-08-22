@@ -11,12 +11,6 @@ OUTPUT_PATH = "output.png"
 STATUS_COL = "Status "
 CROWN_COL = "CrownClass"
 
-
-class Tree:
-    def __init__(self):
-        pass
-
-
 def get_dbh_history(df, tree_id):
     tree_data = df[df["TreeID"] == tree_id].sort_values("Year")
     return list(tree_data["DBH"]), list(tree_data["Year"])

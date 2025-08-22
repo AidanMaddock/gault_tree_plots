@@ -7,6 +7,7 @@ SPECIES_COL = "Species"
 
 
 
+@st.cache_data
 def diversity_plot(species_counts, colourwheel):
     fig2, ax = plt.subplots(figsize=(4, 4))
     species_counts.plot(kind="pie", ax=ax, color=colourwheel)

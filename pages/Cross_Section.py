@@ -1,6 +1,12 @@
 import streamlit as st
+import matplotlib.pyplot as plt
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+st.set_page_config(page_title="Cross Section")
+
 from tree_plots import load_data, plot_data, assign_colors
-from tree_objects import plot_interactive, prepare_plot_data,plot_with_hover_line
+from interactive import plot_interactive, prepare_plot_data, plot_with_hover_line
 from statistics_1 import diversity_plot, dbh_plot
 import pandas as pd 
 import numpy as np
@@ -9,13 +15,13 @@ DIAMETER_COL = "DBH"
 SPECIES_COL = "Species"
 OUTPUT_PATH = "output.png"
 CROWN_COL = "CrownClass"
-STATUS_COL = "Status "
+STATUS_COL = "Status"
 
 st.set_page_config(page_title="Tree Plot Visualizer", layout="centered")
 st.title("Tree Plot Visualizer")
-st.write("Upload a CSV with tree data (species, DBH) to generate a plot.")
+st.write("Upload a CSV with tree data (species, DBH) to generate a plot. This page focuses on cross-sectional analysis, to compare tree distributions, select the 'Comparison' page in the upper left.")
 
-
+# App to produce DBH histogram with species selection 
 def dbh_app(df):
     species_list = sorted(df[SPECIES_COL].dropna().unique())
     species_options = ["Select All"] + species_list
@@ -37,14 +43,13 @@ def dbh_app(df):
         st.write(f"Average DBH: {filtered_df[DIAMETER_COL].mean():.2f} cm")
 
 
-
 # Upload File
 uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
 
 
 if uploaded_file is not None:
     df = load_data(uploaded_file)
-    df = df.rename(columns={"CoorX (m)": "X", "CoorY (m)": "Y", "DBH (cm)": "DBH"})
+    df = df.rename(columns={"CoorX": "X", "CoorY": "Y", "DBH)": "DBH"})
     if df is not None:
         try:
             colors = assign_colors(df[SPECIES_COL].unique())

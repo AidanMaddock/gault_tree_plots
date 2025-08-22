@@ -3,7 +3,7 @@
 This repository hosts the code for an interactive tree plot visualizer. The app explores visually the effect of deer overbrowsing on sampled 20x20 metre plots of trees.
 
 How its made: Python and back-end javascript
-Built with: 
+### Built With
 Streamlit
 Matplotlib
 Pandas

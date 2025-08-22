@@ -8,7 +8,7 @@ import streamlit as st
 from collections import defaultdict
 import itertools
 import pandas as pd
-from tree_objects import get_dbh_history
+from interactive import get_dbh_history
 import time
 
 # Plotting Constants
@@ -17,10 +17,10 @@ import time
 DIAMETER_COL = "DBH"
 SPECIES_COL = "Species"
 OUTPUT_PATH = "output.png"
-STATUS_COL = "Status "
+STATUS_COL = "Status"
 CROWN_COL = "CrownClass"
 
-
+@st.cache_data
 def load_data(filelike):
     if filelike is not None:
         try:
