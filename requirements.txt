@@ -3,5 +3,3 @@ matplotlib
 pandas
 numpy
 plotly
-sys
-os
