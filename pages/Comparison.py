@@ -51,3 +51,9 @@ if uploaded_file is not None:
 
     #Comparison Statistics 
     metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
+
+import seaborn as sns
+
+fig, ax = plt.subplots(figsize=(10,6))
+sns.lineplot(data=df, x="Year", y="Value", hue="PlotID", ax=ax)
+st.pyplot(fig)

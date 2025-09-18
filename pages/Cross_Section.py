@@ -2,7 +2,6 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 st.set_page_config(page_title="Cross Section")
 
 from tree_plots import load_data, plot_data, assign_colors
