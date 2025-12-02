@@ -26,6 +26,8 @@ def load_data(filelike):
         try:
             
             df = pd.read_csv(filelike)
+            # Ensure column header whitespace is stripped so users can upload files with inconsistent headers
+            df.columns = df.columns.str.strip()
 
             if 'Date' in df.columns:
                 df['Date'] = pd.to_datetime(df['Date'], errors='coerce', dayfirst=False)
@@ -45,12 +47,45 @@ def load_data(filelike):
 
 # Assign colours for known species for parity between plot generation and choose from colourwheel if not in list
 def assign_colors(species_list):
+    """Return a mapping of species -> color.
+
+    This function assigns predefined colors for known species and cycles through
+    the matplotlib color cycle for any others. To keep assignments consistent when
+    comparing plots, it assigns colors deterministically by iterating sorted
+    species list.
+    """
     known_species_colors = {
-    "QR": "green", "TC": "blue", "AP": "orange", "PR": "purple", "FG": "brown", "AS": "red", "OV": "olive", "AR": "lightpink", "AA": "peru", "FA": "black"}  
+        "QR": "green",
+        "TC": "blue",
+        "AP": "orange",
+        "PR": "purple",
+        "FG": "brown",
+        "AS": "red",
+        "OV": "olive",
+        "AR": "lightpink",
+        "AA": "peru",
+        "FA": "black",
+    }
+    # Color cycle excluding any colors we already used for known species
     color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
     used = set(known_species_colors.values())
     color_cycle = (c for c in color_cycle if c not in used)
-    return defaultdict(lambda: next(color_cycle), known_species_colors)
+
+    # Use a dict so we can assign explicit colors for each provided species
+    mapping = dict(known_species_colors)
+
+    # Ensure species_list is iterable and sanitized (remove NaNs)
+    try:
+        species_iter = [s for s in set(species_list) if pd.notnull(s)]
+    except Exception:
+        species_iter = []
+
+    for sp in sorted(species_iter):
+        if sp not in mapping:
+            mapping[sp] = next(color_cycle)
+
+    # Return a defaultdict to keep fallback behavior
+    return defaultdict(lambda: next(color_cycle), mapping)
 
 def plot_data(df, species_colors, plotting_group,year):
     fig, ax = plt.subplots(figsize=(8, 7))

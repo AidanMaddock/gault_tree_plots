@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 DIAMETER_COL = "DBH"
 SPECIES_COL = "Species"
 OUTPUT_PATH = "output.png"
-STATUS_COL = "Status "
+STATUS_COL = "Status"
 CROWN_COL = "CrownClass"
 
 def get_dbh_history(df, tree_id):
@@ -17,6 +17,9 @@ def get_dbh_history(df, tree_id):
 
 def prepare_plot_data(df, year):
     df = df.copy()
+    # ensure coordinate columns are named 'X' and 'Y'
+    if 'CoorX' in df.columns and 'X' not in df.columns:
+        df.rename(columns={'CoorX': 'X', 'CoorY': 'Y'}, inplace=True)
     df['TreeID'] = df['X'].astype(str) + "_" + df['Y'].astype(str)
 
     df_year = df[df['Year'] == year]
@@ -63,6 +66,11 @@ def plot_with_hover_line(df_year):
 
 
 def plot_interactive(df, year):
+    df = df.copy()
+    # ensure coordinate columns are named 'X' and 'Y' so plotting works regardless of column naming in the uploaded CSV
+    if 'CoorX' in df.columns and 'X' not in df.columns:
+        df.rename(columns={'CoorX': 'X', 'CoorY': 'Y'}, inplace=True)
+
     df_year = df[df['Year'] == year]
     if df_year.empty:
         st.warning(f"No data found for year {year}.")
