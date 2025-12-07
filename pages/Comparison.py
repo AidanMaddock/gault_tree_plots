@@ -5,7 +5,7 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from tree_plots import load_data, plot_data, assign_colors
 import numpy as np
-from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments, t_statistic_independent
+from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -22,26 +22,28 @@ st.title("Tree Plot Comparison")
 with st.sidebar:
     uploaded_file = st.file_uploader("Choose a data file containing all data. Must include a plotID column", type="csv")
     df = load_data(uploaded_file)
-    # Optional control upload
-    control_file = st.file_uploader("Optional: upload a control file to compare against", type="csv", key="control_file")
-    df_control = load_data(control_file) if control_file is not None else None
     # Default empty list if df is None or does not contain PlotID
     plots_options = df["PlotID"].unique() if (df is not None and "PlotID" in df.columns) else []
-    # Options for control file
-    control_plots_options = df_control["PlotID"].unique() if (df_control is not None and "PlotID" in df_control.columns) else []
-    if df_control is not None and "PlotID" not in df_control.columns:
-        st.warning("Control CSV does not contain a 'PlotID' column. Control plot selection is disabled.")
     if df is not None and "PlotID" not in df.columns:
         st.warning("Uploaded CSV does not contain a 'PlotID' column. Plot selection is disabled.")
-    # Allow comparing a selected plot from main file against the control file.
-    use_control = False
-    if df_control is not None:
-        use_control = st.checkbox("Compare selected plot with a control file plot", value=False)
 
-    # If using control, only select one main plot and select the control plot separately
+    # Checkbox to enable control file comparison
+    use_control = st.checkbox("Compare with a control file", value=False)
+    df_control = None
+    control_plots_options = []
+    control_selected = None
+
+    # Show control upload only if checkbox is checked
+    if use_control:
+        control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
+        df_control = load_data(control_file) if control_file is not None else None
+        control_plots_options = df_control["PlotID"].unique() if (df_control is not None and "PlotID" in df_control.columns) else []
+        if df_control is not None and "PlotID" not in df_control.columns:
+            st.warning("Control CSV does not contain a 'PlotID' column. Control plot selection is disabled.")
+
     if use_control:
         plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
-        control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options)
+        control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
     else:
         plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections = 2)
 
@@ -104,7 +106,6 @@ if uploaded_file is not None and df is not None:
 
     #Comparison Statistics 
     metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
-    tstat_checkbox = st.checkbox("Show t-statistic for mean DBH increment", value=False)
     # If we have two plots, or using control with a selected control plot, compute time-series stats and build Plotly comparison figure
     if (not use_control and len(plots) == 2) or (use_control and len(plots) == 1 and control_selected is not None):
             # Determine plot IDs
@@ -122,7 +123,7 @@ if uploaded_file is not None and df is not None:
                 fig = make_subplots(
                     rows=4, cols=2,
                     specs=[[{"colspan": 2}, None], [{"colspan": 2}, None], [{}, {}], [{"colspan": 2}, None]],
-                    subplot_titles=("Tree density over time", "Basal area (m^2) over time", f"Species composition: {plotA}", f"Species composition: {plotB}", "DBH size-class histogram")
+                    subplot_titles=("Tree density over time", "Basal area (m^2) over time", f"Species composition: {plotA}", f"Species composition: {plotB}", "DBH Distribution")
                 )
 
                 # Density traces
@@ -201,15 +202,6 @@ if uploaded_file is not None and df is not None:
                     st.metric(label=f"Total Basal Area ({plotB})", value=f"{total_ba_b:.2f} m^2")
                     st.metric(label=f"Species richness ({plotB})", value=f"{div_b}")
                     st.metric(label=f"Mean DBH increment ({plotB})", value=f"{mean_inc_b:.2f} cm/yr")
-
-                # Optional t-statistic for mean differences in increments
-                if tstat_checkbox:
-                    t_val, df_val = t_statistic_independent(inc_a, inc_b)
-                    if t_val is None:
-                        st.info("Not enough DBH increment data to compute a t-statistic.")
-                    else:
-                        pass
-                        #st.metric(label='t-statistic (mean DBH increments)', value=f"{t_val:.3f}")
 
 import seaborn as sns
 
