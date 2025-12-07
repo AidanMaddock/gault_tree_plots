@@ -1,123 +1,135 @@
 import matplotlib.pyplot as plt
-import plotly.express as px
-import matplotlib.lines as mlines
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-import io
 import streamlit as st 
 from collections import defaultdict
 import itertools
 import pandas as pd
-from interactive import get_dbh_history
-import time
+from typing import Optional, Dict, Any
 
-# Plotting Constants
-
-#Make importing CSV strip header names and turn to lowercase
-DIAMETER_COL = "DBH"
-SPECIES_COL = "Species"
-OUTPUT_PATH = "output.png"
-STATUS_COL = "Status"
-CROWN_COL = "CrownClass"
+from config import (
+    DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
+    KNOWN_SPECIES_COLORS, PLOT_SIZE_METERS, PLOT_CENTER, DBH_MARKER_SCALE,
+    LEGEND_DBH_SIZES, MATPLOTLIB_FIGSIZE_SQUARE, DEFAULT_GRID_STYLE, DEFAULT_GRID_WIDTH,
+    DATE_COL, YEAR_COL
+)
 
 @st.cache_data
-def load_data(filelike):
+def load_data(filelike) -> Optional[pd.DataFrame]:
+    """Load and prepare CSV data for tree plot analysis.
+    
+    Parameters
+    ----------
+    filelike : file-like object
+        CSV file uploaded via Streamlit
+        
+    Returns
+    -------
+    pd.DataFrame or None
+        Cleaned DataFrame with standardized column names and parsed dates,
+        or None if loading fails
+    """
     if filelike is not None:
         try:
-            
             df = pd.read_csv(filelike)
-            # Ensure column header whitespace is stripped so users can upload files with inconsistent headers
             df.columns = df.columns.str.strip()
 
-            if 'Date' in df.columns:
-                df['Date'] = pd.to_datetime(df['Date'], errors='coerce', dayfirst=False)
-                df['Year'] = df['Date'].dt.year
+            if DATE_COL in df.columns:
+                df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors='coerce', dayfirst=False)
+                df[YEAR_COL] = df[DATE_COL].dt.year
             else:
                 st.warning("No 'Date' column found. Year-based filtering will not be available.")
 
-            alert = st.success("File successfully uploaded and read.")
-            
+            st.success("File successfully uploaded and read.")
             return df
-        except Exception as e:
+        except (pd.errors.ParserError, ValueError) as e:
             st.error(f"Error reading file: {e}")
             return None
-
     return None
 
 
-# Assign colours for known species for parity between plot generation and choose from colourwheel if not in list
-def assign_colors(species_list):
-    """Return a mapping of species -> color.
-
-    This function assigns predefined colors for known species and cycles through
-    the matplotlib color cycle for any others. To keep assignments consistent when
-    comparing plots, it assigns colors deterministically by iterating sorted
-    species list.
+def assign_colors(species_list) -> Dict[Any, str]:
+    """Assign consistent colors to species for plotting.
+    
+    Parameters
+    ----------
+    species_list : iterable
+        List of species identifiers
+        
+    Returns
+    -------
+    defaultdict
+        Mapping of species to color, with fallback to matplotlib color cycle
     """
-    known_species_colors = {
-        "QR": "green",
-        "TC": "blue",
-        "AP": "orange",
-        "PR": "purple",
-        "FG": "brown",
-        "AS": "red",
-        "OV": "olive",
-        "AR": "lightpink",
-        "AA": "peru",
-        "FA": "black",
-    }
-    # Color cycle excluding any colors we already used for known species
     color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-    used = set(known_species_colors.values())
+    used = set(KNOWN_SPECIES_COLORS.values())
     color_cycle = (c for c in color_cycle if c not in used)
 
-    # Use a dict so we can assign explicit colors for each provided species
-    mapping = dict(known_species_colors)
-
-    # Ensure species_list is iterable and sanitized (remove NaNs)
+    mapping = dict(KNOWN_SPECIES_COLORS)
+    
     try:
         species_iter = [s for s in set(species_list) if pd.notnull(s)]
-    except Exception:
+    except (TypeError, AttributeError):
         species_iter = []
 
     for sp in sorted(species_iter):
         if sp not in mapping:
             mapping[sp] = next(color_cycle)
 
-    # Return a defaultdict to keep fallback behavior
     return defaultdict(lambda: next(color_cycle), mapping)
 
-def plot_data(df, species_colors, plotting_group,year):
-    fig, ax = plt.subplots(figsize=(8, 7))
-    df = df[df["Year"] == year]
-    for sp, group in df.groupby(plotting_group):
-        ax.scatter(group["X"], group["Y"], s=group[DIAMETER_COL] * 3, 
-                   c=species_colors[sp], label=sp, marker='o', alpha = 0.8)
+def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year: int) -> str:
+    """Create matplotlib scatter plot of trees colored by specified attribute.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing tree data with X, Y, DBH columns
+    species_colors : dict
+        Mapping of species/attribute values to colors
+    plotting_group : str
+        Column name to color by (e.g., 'Species', 'Status')
+    year : int
+        Year to filter data by
+        
+    Returns
+    -------
+    str
+        Filename of saved plot image
+    """
+    if YEAR_COL not in df.columns:
+        raise ValueError(f"DataFrame must contain '{YEAR_COL}' column")
+    if plotting_group not in df.columns:
+        raise ValueError(f"DataFrame must contain '{plotting_group}' column")
+    
+    fig, ax = plt.subplots(figsize=MATPLOTLIB_FIGSIZE_SQUARE)
+    df_year = df[df[YEAR_COL] == year]
+    
+    if df_year.empty:
+        raise ValueError(f"No data found for year {year}")
+    
+    for sp, group in df_year.groupby(plotting_group):
+        ax.scatter(group["X"], group["Y"], s=group[DIAMETER_COL] * DBH_MARKER_SCALE, 
+                   c=species_colors[sp], label=sp, marker='o', alpha=0.8)
+    
     ax.legend()
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-    ax.axvline(x=10, color='red', linestyle='-', linewidth=1)
-    ax.axhline(y=10, color='red', linestyle='-', linewidth=1)
-    ax.set_xlim(0, 20)
-    ax.set_ylim(0, 20)
-    ax.set_xticks(range(0, 21, 1))
-    ax.set_yticks(range(0, 21, 1))
+    ax.grid(True, which='both', linestyle=DEFAULT_GRID_STYLE, linewidth=DEFAULT_GRID_WIDTH)
+    ax.axvline(x=PLOT_CENTER, color='red', linestyle='-', linewidth=1)
+    ax.axhline(y=PLOT_CENTER, color='red', linestyle='-', linewidth=1)
+    ax.set_xlim(0, PLOT_SIZE_METERS)
+    ax.set_ylim(0, PLOT_SIZE_METERS)
+    ax.set_xticks(range(0, PLOT_SIZE_METERS + 1, 1))
+    ax.set_yticks(range(0, PLOT_SIZE_METERS + 1, 1))
     ax.set_xlabel('Meters (x)')
     ax.set_ylabel('Meters (y)')
     ax.set_title(f'Tree Plot by {plotting_group}, {year}, Scaled by DBH')
 
-    dbh_sizes = [5, 15, 30, 45]  
-    marker_sizes = [dbh * 3 for dbh in dbh_sizes]
-    dbh_handles = [
-        plt.scatter([], [], s=size, color='gray', label=f"{dbh} cm", alpha=0.6)
-        for dbh, size in zip(dbh_sizes, marker_sizes)
-    ]
+    marker_sizes = [dbh * DBH_MARKER_SCALE for dbh in LEGEND_DBH_SIZES]
+    [plt.scatter([], [], s=size, color='gray', label=f"{dbh} cm", alpha=0.6)
+     for dbh, size in zip(LEGEND_DBH_SIZES, marker_sizes)]
 
     ax.legend(title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     st.pyplot(fig)
     fn = 'tree_plot.png'
-
-    # Prepare figure for download
     plt.savefig(fn)
     return fn
 

@@ -1,12 +1,22 @@
 import pandas as pd
 import numpy as np
 import math
+from typing import Optional, Tuple
 
+from config import DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS
 
 def basal_area_m2(dbh_cm: float) -> float:
-    """Return basal area in square meters given DBH in centimeters.
-
-    Basal area (m^2) = pi * (dbh_m / 2) ** 2, where dbh_m = dbh_cm / 100
+    """Calculate basal area in square meters from DBH.
+    
+    Parameters
+    ----------
+    dbh_cm : float
+        Diameter at breast height in centimeters
+        
+    Returns
+    -------
+    float
+        Basal area in square meters
     """
     if dbh_cm is None or pd.isna(dbh_cm):
         return 0.0
@@ -15,44 +25,46 @@ def basal_area_m2(dbh_cm: float) -> float:
     return math.pi * (r ** 2)
 
 
-def compute_plot_year_stats(df: pd.DataFrame, plot_id: str):
-    """Return aggregated statistics per year for a particular plot.
-
-    Returns a dict with three DataFrames:
-      - counts_df: columns ['Year', 'PlotID', 'Count']
-      - basal_area_df: columns ['Year', 'PlotID', 'BasalArea_m2']
-      - species_df: columns ['Year', 'PlotID', 'Species', 'Count', 'Proportion']
+def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
+    """Compute aggregated statistics by year for a plot.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Tree data with Year, PlotID, Species, and DBH columns
+    plot_id : str
+        Plot identifier to filter by
+        
+    Returns
+    -------
+    dict or None
+        Dictionary with 'counts_df', 'basal_area_df', 'species_df' DataFrames,
+        or None if plot has no data or insufficient time-series data
     """
     if df is None:
         return None
-    # Filter for the plot
+    
     plot_df = df[df['PlotID'] == plot_id].copy()
     if plot_df.empty:
         return None
 
-    # Ensure Year exists
     if 'Year' not in plot_df.columns:
-        # Try to infer from Date
         if 'Date' in plot_df.columns:
             plot_df['Year'] = pd.to_datetime(plot_df['Date'], errors='coerce').dt.year
         else:
             raise ValueError('DataFrame must contain Year or Date for time-based statistics')
 
-    # Tree counts per year
     counts = plot_df.groupby('Year').size().reset_index(name='Count')
     counts['PlotID'] = plot_id
 
-    # Basal area per year
-    plot_df['BasalArea'] = plot_df['DBH'].apply(basal_area_m2)
+    plot_df['BasalArea'] = plot_df[DIAMETER_COL].apply(basal_area_m2)
     basal_area = plot_df.groupby('Year')['BasalArea'].sum().reset_index()
     basal_area['PlotID'] = plot_id
     basal_area = basal_area.rename(columns={'BasalArea': 'BasalArea_m2'})
 
-    # Species composition per year
     species = (
-        plot_df.groupby(['Year', 'Species']).size().reset_index(name='Count')
+        plot_df.groupby(['Year', SPECIES_COL]).size().reset_index(name='Count')
     )
-    # Convert to proportions
     yearly_total = species.groupby('Year')['Count'].transform('sum')
     species['Proportion'] = species['Count'] / yearly_total
     species['PlotID'] = plot_id
@@ -64,18 +76,28 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str):
     }
 
 
-def compute_dbh_increments(df: pd.DataFrame, plot_id: str):
-    """Compute per-interval DBH increments (cm/year) for a given plot.
-
-    Returns a numpy array of increments (one per interval per tree).
+def compute_dbh_increments(df: pd.DataFrame, plot_id: str) -> Optional[np.ndarray]:
+    """Compute annual DBH increments for trees in a plot.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Tree data with PlotID, TreeID, Year, and DBH columns
+    plot_id : str
+        Plot identifier to filter by
+        
+    Returns
+    -------
+    np.ndarray or None
+        Array of annual increment values (cm/year), or None if insufficient data
     """
     if df is None:
         return None
+    
     plot_df = df[df['PlotID'] == plot_id].copy()
     if plot_df.empty:
         return None
 
-    # Ensure Year exists
     if 'Year' not in plot_df.columns:
         if 'Date' in plot_df.columns:
             plot_df['Year'] = pd.to_datetime(plot_df['Date'], errors='coerce').dt.year
@@ -85,12 +107,12 @@ def compute_dbh_increments(df: pd.DataFrame, plot_id: str):
     increments = []
     for tree_id, group in plot_df.groupby('TreeID'):
         g = group.sort_values('Year')
-        # compute increments between successive years
         years = g['Year'].values
-        dbhs = g['DBH'].values
+        dbhs = g[DIAMETER_COL].values
+        
         if len(years) < 2:
             continue
-        # compute the pairwise deltas
+        
         for i in range(len(years) - 1):
             dy = years[i+1] - years[i]
             if dy <= 0:
@@ -98,18 +120,25 @@ def compute_dbh_increments(df: pd.DataFrame, plot_id: str):
             delta_dbh = dbhs[i+1] - dbhs[i]
             increments.append(delta_dbh / dy)
 
-    if len(increments) == 0:
-        return None
-    return np.array(increments)
+    return np.array(increments) if len(increments) > 0 else None
 
 
-def t_statistic_independent(a: np.ndarray, b: np.ndarray):
-    """Compute Welch t-statistic for two independent samples.
-
-    Returns (t_stat, df)
+def t_statistic_independent(a: np.ndarray, b: np.ndarray) -> Tuple[Optional[float], Optional[float]]:
+    """Compute Welch t-statistic for independent samples.
+    
+    Parameters
+    ----------
+    a, b : np.ndarray
+        Two samples to compare
+        
+    Returns
+    -------
+    tuple
+        (t-statistic, degrees of freedom) or (None, None) if invalid
     """
-    if a is None or b is None or len(a) < 2 or len(b) < 2:
+    if a is None or b is None or len(a) < MIN_SAMPLES_FOR_STATS or len(b) < MIN_SAMPLES_FOR_STATS:
         return None, None
+    
     n1 = len(a)
     n2 = len(b)
     m1 = float(np.nanmean(a))
@@ -117,21 +146,31 @@ def t_statistic_independent(a: np.ndarray, b: np.ndarray):
     s1 = float(np.nanvar(a, ddof=1))
     s2 = float(np.nanvar(b, ddof=1))
     denom = math.sqrt(s1 / n1 + s2 / n2)
+    
     if denom == 0:
         return None, None
+    
     t = (m1 - m2) / denom
-    # Welch–Satterthwaite df approximation
     num = (s1 / n1 + s2 / n2) ** 2
     den = (s1 ** 2) / (n1 ** 2 * (n1 - 1)) + (s2 ** 2) / (n2 ** 2 * (n2 - 1))
-    if den == 0:
-        df = None
-    else:
-        df = num / den
+    
+    df = num / den if den != 0 else None
     return t, df
 
 
-def diversity(data):
-    # simple diversity stub: return number of unique species
-    if data is None:
+def diversity(data: Optional[pd.DataFrame]) -> int:
+    """Count unique species in dataset.
+    
+    Parameters
+    ----------
+    data : pd.DataFrame or None
+        Tree data with Species column
+        
+    Returns
+    -------
+    int
+        Number of unique species
+    """
+    if data is None or data.empty:
         return 0
-    return len(data['Species'].unique())
+    return len(data[SPECIES_COL].unique())
