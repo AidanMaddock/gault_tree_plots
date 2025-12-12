@@ -70,65 +70,69 @@ def dbh_app(df: pd.DataFrame, colors: dict) -> None:
 st.title("Tree Plot Visualizer")
 st.write(WELCOME_TEXT)
 
-uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
+file_option = st.radio("Data source:", ["Upload your data", "See an example"], horizontal=True)
 
-if uploaded_file is not None:
+if file_option == "See an example":
+    uploaded_file = "example_data.csv"
     df = load_data(uploaded_file)
-    if df is not None:
-        df = _normalize_coordinates(df)
+else:
+    uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
+    df = load_data(uploaded_file) if uploaded_file is not None else None
+
+if df is not None:
+    df = _normalize_coordinates(df)
+    
+    try:
+        colors = assign_colors(df[SPECIES_COL].unique())
+        topcol1, topcol2, topcol3 = st.columns([2, 1, 2])
         
-        try:
-            colors = assign_colors(df[SPECIES_COL].unique())
-            topcol1, topcol2, topcol3 = st.columns([2, 1, 2])
-            
-            with topcol1:
-                plotting_group = st.selectbox("Pick attribute to plot trees by", 
-                                             [SPECIES_COL, STATUS_COL, CROWN_COL])
-            
-            if "Year" in df.columns:  
-                year_list = sorted(df["Year"].dropna().unique())
-                with topcol2:
-                    year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
+        with topcol1:
+            plotting_group = st.selectbox("Pick attribute to plot trees by", 
+                                         [SPECIES_COL, STATUS_COL, CROWN_COL])
+        
+        if "Year" in df.columns:  
+            year_list = sorted(df["Year"].dropna().unique())
+            with topcol2:
+                year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
+        else:
+            st.warning("No 'Year' column found in data.")
+            year = None
+        
+        with topcol3:
+            interactive = st.checkbox("Interactive Chart")
+        
+        if year is not None:
+            if interactive:
+                plot_interactive(df, year)    
             else:
-                st.warning("No 'Year' column found in data.")
-                year = None
+                fn = plot_data(df, colors, plotting_group, year)
+
+        species_counts = df[SPECIES_COL].value_counts().sort_values(ascending=False)
+        with st.sidebar:
+            diversity_plot(species_counts, colors)
+            st.metric("Total trees:", len(df))
+            st.metric("Unique Species", len(species_counts))
+            dbh_app(df, colors)
             
-            with topcol3:
-                interactive = st.checkbox("Interactive Chart")
-            
+        col1, col2, col3 = st.columns(3)
+        with col1:
             if year is not None:
-                if interactive:
-                    plot_interactive(df, year)    
-                else:
-                    fn = plot_data(df, colors, plotting_group, year)
+                st.write(DEFAULT_YEAR_TEXT_FORMAT.format(year))
+        with col2:
+            if not interactive and year is not None:
+                with open(fn, "rb") as img:
+                    st.download_button(
+                        label="Download Figure",
+                        data=img,
+                        file_name=fn,
+                        mime="image/png"
+                    )
+        with col3:
+            st.write("Created by Aidan Maddock")
 
-            species_counts = df[SPECIES_COL].value_counts().sort_values(ascending=False)
-            with st.sidebar:
-                st.write("Graphs:")
-                diversity_plot(species_counts, colors)
-                st.metric("Total trees:", len(df))
-                st.metric("Unique Species", len(species_counts))
-                dbh_app(df, colors)
-                
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if year is not None:
-                    st.write(DEFAULT_YEAR_TEXT_FORMAT.format(year))
-            with col2:
-                if not interactive and year is not None:
-                    with open(fn, "rb") as img:
-                        st.download_button(
-                            label="Download Figure",
-                            data=img,
-                            file_name=fn,
-                            mime="image/png"
-                        )
-            with col3:
-                st.write("Created by Aidan Maddock")
-
-        except ValueError as e:
-            st.error(f"Data error: {e}")
-        except Exception as e:
-            st.error(f"Error during plotting: {e}. Refer to the troubleshooting section.")
-    else:
-        st.warning("Data could not be loaded. Check integrity of file.")
+    except ValueError as e:
+        st.error(f"Data error: {e}")
+    except Exception as e:
+        st.error(f"Error during plotting: {e}. Refer to the troubleshooting section.")
+else:
+    st.warning("Data could not be loaded. Check integrity of file.")

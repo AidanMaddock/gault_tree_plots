@@ -51,7 +51,7 @@ KNOWN_SPECIES_COLORS = {
 }
 
 # UI text
-WELCOME_TEXT = "Upload a CSV with tree data (species, DBH) to generate a plot. This page focuses on cross-sectional analysis; to compare tree distributions, select the 'Comparison' page in the upper left."
+WELCOME_TEXT = "Upload a CSV with tree data (species, DBH) to generate a plot. This page focuses on cross-sectional analysis; to compare different plots, select the 'Comparison' page in the upper left."
 COMPARISON_DESCRIPTION = "Select plots to compare tree distributions and statistics over time."
 DEFAULT_YEAR_TEXT_FORMAT = "Year: {}"
 

@@ -33,8 +33,15 @@ def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
 st.title("Tree Plot Comparison")
 
 with st.sidebar:
-    uploaded_file = st.file_uploader("Choose a data file containing all data. Must include a PlotID column", type="csv")
-    df = load_data(uploaded_file)
+    file_option = st.radio("Data source:", ["Upload your data", "See an example"], horizontal=True)
+    
+    if file_option == "See an example":
+        uploaded_file = "example_data.csv"
+        df = load_data(uploaded_file)
+        st.info("Showing example data from example_data.csv")
+    else:
+        uploaded_file = st.file_uploader("Choose a data file containing all data. Must include a PlotID column", type="csv")
+        df = load_data(uploaded_file) if uploaded_file is not None else None
     plots_options = df[PLOTID_COL].unique() if (df is not None and PLOTID_COL in df.columns) else []
     if df is not None and PLOTID_COL not in df.columns:
         st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column. Plot selection is disabled.")
@@ -58,6 +65,7 @@ with st.sidebar:
         plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
 
     plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
+    show_heatmap = st.checkbox("Show heatmap overlay", value=False)
 
 if uploaded_file is not None and df is not None:
     df = _normalize_coordinates(df)
@@ -96,7 +104,35 @@ if uploaded_file is not None and df is not None:
                         subset1 = subset[subset["Year"] == year1]
                     st.subheader(f"Plot {plot_id}")
                     if subset1 is not None:
-                        plot_data(subset1, colors, plotting_group, year=year1)
+                        if show_heatmap:
+                            fig_heat = go.Figure()
+                            fig_heat.add_trace(go.Histogram2d(
+                                x=subset1["X"],
+                                y=subset1["Y"],
+                                colorscale="YlOrRd",
+                                opacity=0.5,
+                                xbins=dict(start=0, end=20, size=1),
+                                ybins=dict(start=0, end=20, size=1),
+                                showscale=True,
+                                name="Density Heatmap"
+                            ))
+                            fig_heat.add_trace(go.Scatter(
+                                x=subset1["X"],
+                                y=subset1["Y"],
+                                mode="markers",
+                                marker=dict(size=subset1[DIAMETER_COL] * 0.8, color="blue", opacity=0.7),
+                                text=subset1[SPECIES_COL],
+                                name="Trees"
+                            ))
+                            fig_heat.update_layout(
+                                title=f"Plot {plot_id} ({year1}) with Heatmap",
+                                xaxis=dict(range=[0, 20], title="X"),
+                                yaxis=dict(range=[0, 20], title="Y"),
+                                height=400
+                            )
+                            st.plotly_chart(fig_heat, use_container_width=True)
+                        else:
+                            plot_data(subset1, colors, plotting_group, year=year1)
             else:
                 with col2:
                     year2 = st.selectbox("Select year to display", options=sorted(subset["Year"].dropna().unique()), key=2)
@@ -104,9 +140,37 @@ if uploaded_file is not None and df is not None:
                         subset2 = subset[subset["Year"] == year2]
                     st.subheader(f"Plot {plot_id}")
                     if subset2 is not None:
-                        plot_data(subset2, colors, plotting_group, year=year2)
+                        if show_heatmap:
+                            fig_heat = go.Figure()
+                            fig_heat.add_trace(go.Histogram2d(
+                                x=subset2["X"],
+                                y=subset2["Y"],
+                                colorscale="YlOrRd",
+                                opacity=0.5,
+                                xbins=dict(start=0, end=20, size=1),
+                                ybins=dict(start=0, end=20, size=1),
+                                showscale=True,
+                                name="Density Heatmap"
+                            ))
+                            fig_heat.add_trace(go.Scatter(
+                                x=subset2["X"],
+                                y=subset2["Y"],
+                                mode="markers",
+                                marker=dict(size=subset2[DIAMETER_COL] * 0.8, color="blue", opacity=0.7),
+                                text=subset2[SPECIES_COL],
+                                name="Trees"
+                            ))
+                            fig_heat.update_layout(
+                                title=f"Plot {plot_id} ({year2}) with Heatmap",
+                                xaxis=dict(range=[0, 20], title="X"),
+                                yaxis=dict(range=[0, 20], title="Y"),
+                                height=400
+                            )
+                            st.plotly_chart(fig_heat, use_container_width=True)
+                        else:
+                            plot_data(subset2, colors, plotting_group, year=year2)
 
-    metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
+    #metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
     
     if (not use_control and len(plots) == 2) or (use_control and len(plots) == 1 and control_selected is not None):
         if use_control:
