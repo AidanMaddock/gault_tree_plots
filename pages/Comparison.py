@@ -12,7 +12,7 @@ from typing import Optional, List
 import pandas as pd
 
 from config import (
-    DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
+    DIAMETER_COL, PLOT_SIZE_METERS, SPECIES_COL, STATUS_COL, CROWN_COL,
     PLOTID_COL, PLOT_AREA_M2, MATPLOTLIB_FIGSIZE_WIDE,
     COORD_X_ALIASES, COORD_Y_ALIASES
 )
@@ -20,6 +20,9 @@ from config import (
 def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     """Rename coordinate columns to 'X' and 'Y' if needed."""
     df = df.copy()
+
+    
+    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
     for alias in COORD_X_ALIASES:
         if alias in df.columns and 'X' not in df.columns:
             df.rename(columns={alias: 'X'}, inplace=True)
@@ -28,6 +31,13 @@ def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
         if alias in df.columns and 'Y' not in df.columns:
             df.rename(columns={alias: 'Y'}, inplace=True)
             break
+
+    for col in df.columns:
+        if 'plot' in col.lower():
+            df[col] = df[col].astype(str).str.replace('\u00A0', ' ')  # NBSP -> space
+            df[col] = df[col].str.strip()
+            df[col] = df[col].str.replace(r'\s*-\s*', '-', regex=True)
+    
     return df
 
 st.title("Tree Plot Comparison")
@@ -46,6 +56,7 @@ with st.sidebar:
     has_plots_subplots = False
     
     if df is not None:
+        
         if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
             has_plots_subplots = True
     
@@ -88,8 +99,17 @@ with st.sidebar:
 
 if uploaded_file is not None and df is not None:
     df = _normalize_coordinates(df)
+    df["X"] = pd.to_numeric(df["X"], errors="coerce")
+    df["Y"] = pd.to_numeric(df["Y"], errors="coerce")
+
+    df["X"] = df["X"] % PLOT_SIZE_METERS
+    df["Y"] = df["Y"] % PLOT_SIZE_METERS
     if df_control is not None:
         df_control = _normalize_coordinates(df_control)
+        df_control["X"] = pd.to_numeric(df_control["X"], errors="coerce")
+        df_control["Y"] = pd.to_numeric(df_control["Y"], errors="coerce")
+        df_control["X"] = df_control["X"] % PLOT_SIZE_METERS
+        df_control["Y"] = df_control["Y"] % PLOT_SIZE_METERS
 
     all_species = []
     if SPECIES_COL in df.columns:

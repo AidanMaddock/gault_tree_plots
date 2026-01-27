@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 
 from config import (
-    DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
+    DIAMETER_COL, PLOT_SIZE_METERS, SPECIES_COL, STATUS_COL, CROWN_COL,
     WELCOME_TEXT, DEFAULT_BINS, MIN_BINS, MAX_BINS,
     DEFAULT_YEAR_TEXT_FORMAT, COORD_X_ALIASES, COORD_Y_ALIASES, PLOTID_COL
 )
@@ -71,9 +71,14 @@ with st.sidebar:
         uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
         df = load_data(uploaded_file) if uploaded_file is not None else None
 
+
 if df is not None:
     df = _normalize_coordinates(df)
-    
+    df["X"] = pd.to_numeric(df["X"], errors="coerce")
+    df["Y"] = pd.to_numeric(df["Y"], errors="coerce")
+
+    df["X"] = df["X"] % PLOT_SIZE_METERS
+    df["Y"] = df["Y"] % PLOT_SIZE_METERS
     # Check for plots/subplots columns
     has_plots_subplots = False
     if df is not None:
@@ -115,17 +120,14 @@ if df is not None:
             st.warning("No 'Year' column found in data.")
             year = None
         
-        with topcol3:
-            interactive = st.checkbox("Interactive Chart")
         
         if year is not None:
-            if interactive:
-                plot_interactive(df, year)    
-            else:
-                fn = plot_data(df, colors, plotting_group, year)
+            fn = plot_data(df, colors, plotting_group, year)
+            
 
         species_counts = df[SPECIES_COL].value_counts().sort_values(ascending=False)
         with st.sidebar:
+            st.write(df)
             diversity_plot(species_counts, colors)
             st.metric("Total trees:", len(df))
             st.metric("Unique Species", len(species_counts))
@@ -136,14 +138,13 @@ if df is not None:
             if year is not None:
                 st.write(DEFAULT_YEAR_TEXT_FORMAT.format(year))
         with col2:
-            if not interactive and year is not None:
-                with open(fn, "rb") as img:
-                    st.download_button(
-                        label="Download Figure",
-                        data=img,
-                        file_name=fn,
-                        mime="image/png"
-                    )
+            with open(fn, "rb") as img:
+                st.download_button(
+                    label="Download Figure",
+                    data=img,
+                    file_name=fn,
+                    mime="image/png"
+                )
         with col3:
             st.write("Created by Aidan Maddock")
 

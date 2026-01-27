@@ -5,6 +5,7 @@ import itertools
 import pandas as pd
 from typing import Optional, Dict, Any
 from matplotlib.lines import Line2D
+import numpy as np
 
 from config import (
     DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
@@ -13,7 +14,6 @@ from config import (
     DATE_COL, YEAR_COL
 )
 
-@st.cache_data
 def load_data(filelike) -> Optional[pd.DataFrame]:
     if filelike is not None:
         try:
@@ -28,7 +28,10 @@ def load_data(filelike) -> Optional[pd.DataFrame]:
                 df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors='coerce', dayfirst=False)
                 df[YEAR_COL] = df[DATE_COL].dt.year
             elif "YearInv" in df.columns:
-                df[YEAR_COL] = pd.to_numeric(df["YearInv"], errors='coerce').astype('int64')
+                df[YEAR_COL] = pd.to_numeric(df["YearInv"].astype(str).str.strip(), errors='coerce').astype('Int64')
+            elif YEAR_COL in df.columns:
+                # handle the case where CSV already has a Year column with stray whitespace or string types
+                df[YEAR_COL] = pd.to_numeric(df[YEAR_COL].astype(str).str.strip(), errors='coerce').astype('Int64')
             else:
                 st.warning("No date/year column found. Year-based filtering will not be available.")
 
@@ -71,18 +74,35 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
     if plotting_group not in df.columns:
         raise ValueError(f"DataFrame must contain '{plotting_group}' column")
     
+    try:
+        year_int = int(year)
+    except Exception:
+        year_int = year
+
+    # Coerce numeric columns used for plotting
+    # creates copies of numeric versions to keep original df untouched
+    df = df.copy()
+    df["X"] = pd.to_numeric(df["X"], errors='coerce')
+    df["Y"] = pd.to_numeric(df["Y"], errors='coerce')
+    df[DIAMETER_COL] = pd.to_numeric(df[DIAMETER_COL], errors='coerce')
+
     fig, ax = plt.subplots(figsize=MATPLOTLIB_FIGSIZE_SQUARE)
-    df_year = df[df[YEAR_COL] == year]
-    
+    df_year = df[df[YEAR_COL] == year_int]
+
     if df_year.empty:
+        st.warning(f"No data found for year {year} after coercion (year value used: {year_int}). "
+                   "Check YEAR_COL types and values in your DataFrame.")
         raise ValueError(f"No data found for year {year}")
-    
-    # Filter out rows with missing required columns for plotting
+
+    # Require numeric/finite X,Y,DBH and a valid plotting_group
     df_year = df_year.dropna(subset=["X", "Y", DIAMETER_COL, plotting_group])
-    
+    # also enforce finite numeric values (excludes inf/-inf)
+    df_year = df_year[np.isfinite(df_year["X"]) & np.isfinite(df_year["Y"]) & np.isfinite(df_year[DIAMETER_COL])]
+
     if df_year.empty:
+        st.warning(f"No data found for year {year} with numeric X, Y, and {DIAMETER_COL} after coercion.")
         raise ValueError(f"No data found for year {year} with complete X, Y, {DIAMETER_COL}, and {plotting_group} values")
-    
+
     for sp, group in df_year.groupby(plotting_group, dropna=True):
         if not group.empty and len(group) > 0:
             # Ensure all values are numeric and not NaN
