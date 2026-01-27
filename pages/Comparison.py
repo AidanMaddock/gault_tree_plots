@@ -42,21 +42,40 @@ with st.sidebar:
     else:
         uploaded_file = st.file_uploader("Choose a data file containing all data. Must include a PlotID column", type="csv")
         df = load_data(uploaded_file) if uploaded_file is not None else None
-    plots_options = df[PLOTID_COL].unique() if (df is not None and PLOTID_COL in df.columns) else []
-    if df is not None and PLOTID_COL not in df.columns:
-        st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column. Plot selection is disabled.")
+    
+    has_plots_subplots = False
+    
+    if df is not None:
+        if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
+            has_plots_subplots = True
+    
+    if has_plots_subplots:
+        plots_options = sorted(df["PlotDisplay"].dropna().unique())
+    else:
+        plots_options = df[PLOTID_COL].unique() if (df is not None and PLOTID_COL in df.columns) else []
+        if df is not None and PLOTID_COL not in df.columns and not has_plots_subplots:
+            st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Plot selection is disabled.")
 
     use_control = st.checkbox("Compare with a control file", value=False)
     df_control = None
     control_plots_options = []
     control_selected = None
+    has_control_plots_subplots = False
 
     if use_control:
         control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
         df_control = load_data(control_file) if control_file is not None else None
-        control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
-        if df_control is not None and PLOTID_COL not in df_control.columns:
-            st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column. Control plot selection is disabled.")
+        
+        if df_control is not None:
+            if ("Plots" in df_control.columns and "Subplots" in df_control.columns) or ("Plot" in df_control.columns and "SubPlot" in df_control.columns):
+                has_control_plots_subplots = True
+        
+        if has_control_plots_subplots:
+            control_plots_options = sorted(df_control["PlotDisplay"].dropna().unique())
+        else:
+            control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
+            if df_control is not None and PLOTID_COL not in df_control.columns and not has_control_plots_subplots:
+                st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Control plot selection is disabled.")
 
     if use_control:
         plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
@@ -65,7 +84,7 @@ with st.sidebar:
         plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
 
     plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
-    show_heatmap = st.checkbox("Show heatmap overlay", value=False)
+
 
 if uploaded_file is not None and df is not None:
     df = _normalize_coordinates(df)
@@ -85,6 +104,8 @@ if uploaded_file is not None and df is not None:
 
         datasets = []
         plot_ids = []
+        plot_labels = []
+        
         if use_control:
             plot_ids = [plots[0], control_selected]
             datasets = [df, df_control]
@@ -95,80 +116,47 @@ if uploaded_file is not None and df is not None:
         subset1 = None
         subset2 = None
         for i, plot_id in enumerate(plot_ids):
-            subset = datasets[i][datasets[i][PLOTID_COL] == plot_id]
+            # Convert PlotDisplay format ("1 - 1") to PlotID format ("1-1") if needed
+            # Use the appropriate has_plots_subplots flag based on which dataset we're using
+            if i == 0:
+                should_convert = has_plots_subplots
+            else:  # i == 1
+                should_convert = has_control_plots_subplots if use_control else has_plots_subplots
+            
+            if should_convert and " - " in str(plot_id):
+                plot_id_filtered = plot_id.replace(" - ", "-")
+            else:
+                plot_id_filtered = plot_id
+            
+            subset = datasets[i][datasets[i][PLOTID_COL] == plot_id_filtered]
+            label_id = plot_id
 
             if i == 0:
                 with col1:
-                    year1 = st.selectbox("Select year to display", options=sorted(subset["Year"].dropna().unique()), key=1)
+                    if subset.empty:
+                        st.warning(f"No data found for {label_id}")
+                        year1 = None
+                    else:
+                        available_years = sorted(subset["Year"].dropna().unique())
+                        year1 = st.selectbox("Select year to display", options=available_years, key=1)
                     if year1:
                         subset1 = subset[subset["Year"] == year1]
-                    st.subheader(f"Plot {plot_id}")
-                    if subset1 is not None:
-                        if show_heatmap:
-                            fig_heat = go.Figure()
-                            fig_heat.add_trace(go.Histogram2d(
-                                x=subset1["X"],
-                                y=subset1["Y"],
-                                colorscale="YlOrRd",
-                                opacity=0.5,
-                                xbins=dict(start=0, end=20, size=1),
-                                ybins=dict(start=0, end=20, size=1),
-                                showscale=True,
-                                name="Density Heatmap"
-                            ))
-                            fig_heat.add_trace(go.Scatter(
-                                x=subset1["X"],
-                                y=subset1["Y"],
-                                mode="markers",
-                                marker=dict(size=subset1[DIAMETER_COL] * 0.8, color="blue", opacity=0.7),
-                                text=subset1[SPECIES_COL],
-                                name="Trees"
-                            ))
-                            fig_heat.update_layout(
-                                title=f"Plot {plot_id} ({year1}) with Heatmap",
-                                xaxis=dict(range=[0, 20], title="X"),
-                                yaxis=dict(range=[0, 20], title="Y"),
-                                height=400
-                            )
-                            st.plotly_chart(fig_heat, use_container_width=True)
-                        else:
-                            plot_data(subset1, colors, plotting_group, year=year1)
+                    st.subheader(f"Plot {label_id}")
+                    if subset1 is not None and not subset1.empty:
+                        plot_data(subset1, colors, plotting_group, year=year1)
             else:
                 with col2:
-                    year2 = st.selectbox("Select year to display", options=sorted(subset["Year"].dropna().unique()), key=2)
+                    if subset.empty:
+                        st.warning(f"No data found for {label_id}")
+                        year2 = None
+                    else:
+                        available_years = sorted(subset["Year"].dropna().unique())
+                        year2 = st.selectbox("Select year to display", options=available_years, key=2)
                     if year2:
                         subset2 = subset[subset["Year"] == year2]
-                    st.subheader(f"Plot {plot_id}")
-                    if subset2 is not None:
-                        if show_heatmap:
-                            fig_heat = go.Figure()
-                            fig_heat.add_trace(go.Histogram2d(
-                                x=subset2["X"],
-                                y=subset2["Y"],
-                                colorscale="YlOrRd",
-                                opacity=0.5,
-                                xbins=dict(start=0, end=20, size=1),
-                                ybins=dict(start=0, end=20, size=1),
-                                showscale=True,
-                                name="Density Heatmap"
-                            ))
-                            fig_heat.add_trace(go.Scatter(
-                                x=subset2["X"],
-                                y=subset2["Y"],
-                                mode="markers",
-                                marker=dict(size=subset2[DIAMETER_COL] * 0.8, color="blue", opacity=0.7),
-                                text=subset2[SPECIES_COL],
-                                name="Trees"
-                            ))
-                            fig_heat.update_layout(
-                                title=f"Plot {plot_id} ({year2}) with Heatmap",
-                                xaxis=dict(range=[0, 20], title="X"),
-                                yaxis=dict(range=[0, 20], title="Y"),
-                                height=400
-                            )
-                            st.plotly_chart(fig_heat, use_container_width=True)
-                        else:
-                            plot_data(subset2, colors, plotting_group, year=year2)
+                    st.subheader(f"Plot {label_id}")
+                    if subset2 is not None and not subset2.empty:
+                        plot_data(subset2, colors, plotting_group, year=year2)
 
     #metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
     
@@ -178,8 +166,25 @@ if uploaded_file is not None and df is not None:
         else:
             plotA, plotB = plots[0], plots[1]
         
-        stats_a = compute_plot_year_stats(df, plotA)
-        stats_b = compute_plot_year_stats(df_control if (use_control and df_control is not None) else df, plotB)
+        if has_plots_subplots:
+            plotA_id = plotA.replace(" - ", "-") if " - " in plotA else plotA
+            stats_a = compute_plot_year_stats(df, plotA_id)
+        else:
+            stats_a = compute_plot_year_stats(df, plotA)
+        
+        if use_control and has_control_plots_subplots:
+            plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+            stats_b = compute_plot_year_stats(df_control, plotB_id)
+        elif use_control:
+            df_b = df_control if df_control is not None else df
+            stats_b = compute_plot_year_stats(df_b, plotB)
+        else:
+            # When not using control and has_plots_subplots, apply same conversion as plotA
+            if has_plots_subplots:
+                plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+                stats_b = compute_plot_year_stats(df, plotB_id)
+            else:
+                stats_b = compute_plot_year_stats(df, plotB)
 
         if stats_a is None or stats_b is None:
             st.warning("One or both selected plots do not have time-based data for statistics.")
@@ -246,12 +251,44 @@ if uploaded_file is not None and df is not None:
             avg_count_a = a_counts['Count'].mean() if not a_counts.empty else 0
             avg_count_b = b_counts['Count'].mean() if not b_counts.empty else 0
             
-            div_a = diversity(df[df[PLOTID_COL] == plotA])
-            df_b = df_control if (use_control and df_control is not None) else df
-            div_b = diversity(df_b[df_b[PLOTID_COL] == plotB])
+            if has_plots_subplots:
+                plotA_id = plotA.replace(" - ", "-") if " - " in plotA else plotA
+                div_a = diversity(df[df["PlotID"] == plotA_id])
+            else:
+                div_a = diversity(df[df[PLOTID_COL] == plotA])
+            
+            if use_control and has_control_plots_subplots:
+                plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+                div_b = diversity(df_control[df_control["PlotID"] == plotB_id])
+            elif use_control:
+                df_b = df_control if df_control is not None else df
+                div_b = diversity(df_b[df_b[PLOTID_COL] == plotB])
+            else:
+                if has_plots_subplots:
+                    plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+                    div_b = diversity(df[df["PlotID"] == plotB_id])
+                else:
+                    div_b = diversity(df[df[PLOTID_COL] == plotB])
 
-            inc_a = compute_dbh_increments(df, plotA)
-            inc_b = compute_dbh_increments(df_b, plotB)
+            if has_plots_subplots:
+                plotA_id = plotA.replace(" - ", "-") if " - " in plotA else plotA
+                inc_a = compute_dbh_increments(df, plotA_id)
+            else:
+                inc_a = compute_dbh_increments(df, plotA)
+            
+            if use_control and has_control_plots_subplots:
+                plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+                inc_b = compute_dbh_increments(df_control, plotB_id)
+            elif use_control:
+                df_b = df_control if df_control is not None else df
+                inc_b = compute_dbh_increments(df_b, plotB)
+            else:
+                if has_plots_subplots:
+                    plotB_id = plotB.replace(" - ", "-") if " - " in plotB else plotB
+                    inc_b = compute_dbh_increments(df, plotB_id)
+                else:
+                    inc_b = compute_dbh_increments(df, plotB)
+            
             mean_inc_a = np.nanmean(inc_a) if inc_a is not None and len(inc_a) > 0 else 0
             mean_inc_b = np.nanmean(inc_b) if inc_b is not None and len(inc_b) > 0 else 0
 

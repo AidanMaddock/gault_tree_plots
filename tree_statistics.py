@@ -3,7 +3,7 @@ import numpy as np
 import math
 from typing import Optional, Tuple
 
-from config import DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS
+from config import DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS, TREEID_COL, PLOTID_COL
 
 def basal_area_m2(dbh_cm: float) -> float:
     """Calculate basal area in square meters from DBH.
@@ -33,7 +33,7 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
     df : pd.DataFrame
         Tree data with Year, PlotID, Species, and DBH columns
     plot_id : str
-        Plot identifier to filter by
+        Plot identifier to filter by, or None if df is already filtered
         
     Returns
     -------
@@ -44,22 +44,28 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
     if df is None:
         return None
     
-    plot_df = df[df['PlotID'] == plot_id].copy()
+    if plot_id is not None and PLOTID_COL in df.columns:
+        plot_df = df[df[PLOTID_COL] == plot_id].copy()
+    else:
+        plot_df = df.copy()
+    
     if plot_df.empty:
         return None
 
     if 'Year' not in plot_df.columns:
         if 'Date' in plot_df.columns:
             plot_df['Year'] = pd.to_datetime(plot_df['Date'], errors='coerce').dt.year
+        elif 'YearInv' in plot_df.columns:
+            plot_df['Year'] = plot_df['YearInv']
         else:
-            raise ValueError('DataFrame must contain Year or Date for time-based statistics')
+            raise ValueError('DataFrame must contain Year, Date, or YearInv for time-based statistics')
 
     counts = plot_df.groupby('Year').size().reset_index(name='Count')
-    counts['PlotID'] = plot_id
+    counts['PlotID'] = plot_id if plot_id is not None else 'Plot'
 
     plot_df['BasalArea'] = plot_df[DIAMETER_COL].apply(basal_area_m2)
     basal_area = plot_df.groupby('Year')['BasalArea'].sum().reset_index()
-    basal_area['PlotID'] = plot_id
+    basal_area['PlotID'] = plot_id if plot_id is not None else 'Plot'
     basal_area = basal_area.rename(columns={'BasalArea': 'BasalArea_m2'})
 
     species = (
@@ -67,7 +73,7 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
     )
     yearly_total = species.groupby('Year')['Count'].transform('sum')
     species['Proportion'] = species['Count'] / yearly_total
-    species['PlotID'] = plot_id
+    species['PlotID'] = plot_id if plot_id is not None else 'Plot'
 
     return {
         'counts_df': counts,
@@ -82,9 +88,9 @@ def compute_dbh_increments(df: pd.DataFrame, plot_id: str) -> Optional[np.ndarra
     Parameters
     ----------
     df : pd.DataFrame
-        Tree data with PlotID, TreeID, Year, and DBH columns
+        Tree data with PlotID, StandardID, Year, and DBH columns
     plot_id : str
-        Plot identifier to filter by
+        Plot identifier to filter by, or None if df is already filtered
         
     Returns
     -------
@@ -94,18 +100,24 @@ def compute_dbh_increments(df: pd.DataFrame, plot_id: str) -> Optional[np.ndarra
     if df is None:
         return None
     
-    plot_df = df[df['PlotID'] == plot_id].copy()
+    if plot_id is not None and PLOTID_COL in df.columns:
+        plot_df = df[df[PLOTID_COL] == plot_id].copy()
+    else:
+        plot_df = df.copy()
+    
     if plot_df.empty:
         return None
 
     if 'Year' not in plot_df.columns:
         if 'Date' in plot_df.columns:
             plot_df['Year'] = pd.to_datetime(plot_df['Date'], errors='coerce').dt.year
+        elif 'YearInv' in plot_df.columns:
+            plot_df['Year'] = plot_df['YearInv']
         else:
-            raise ValueError('DataFrame must contain Year or Date for increment computation')
+            raise ValueError('DataFrame must contain Year, Date, or YearInv for increment computation')
 
     increments = []
-    for tree_id, group in plot_df.groupby('TreeID'):
+    for tree_id, group in plot_df.groupby(TREEID_COL):
         g = group.sort_values('Year')
         years = g['Year'].values
         dbhs = g[DIAMETER_COL].values

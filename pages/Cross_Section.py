@@ -14,7 +14,7 @@ import numpy as np
 from config import (
     DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
     WELCOME_TEXT, DEFAULT_BINS, MIN_BINS, MAX_BINS,
-    DEFAULT_YEAR_TEXT_FORMAT, COORD_X_ALIASES, COORD_Y_ALIASES
+    DEFAULT_YEAR_TEXT_FORMAT, COORD_X_ALIASES, COORD_Y_ALIASES, PLOTID_COL
 )
 
 def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
@@ -31,15 +31,6 @@ def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def dbh_app(df: pd.DataFrame, colors: dict) -> None:
-    """DBH histogram selection and display.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tree data with Species and DBH columns
-    colors : dict
-        Species to color mapping
-    """
     species_list = sorted(df[SPECIES_COL].dropna().unique())
     species_options = ["Select All"] + list(species_list)
     selected = st.multiselect("Choose species:", options=species_options, default=["Select All"])
@@ -70,17 +61,43 @@ def dbh_app(df: pd.DataFrame, colors: dict) -> None:
 st.title("Tree Plot Visualizer")
 st.write(WELCOME_TEXT)
 
-file_option = st.radio("Data source:", ["Upload your data", "See an example"], horizontal=True)
+with st.sidebar:
+    file_option = st.radio("Data source:", ["Upload your data", "See an example"], horizontal=True)
 
-if file_option == "See an example":
-    uploaded_file = "example_data.csv"
-    df = load_data(uploaded_file)
-else:
-    uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
-    df = load_data(uploaded_file) if uploaded_file is not None else None
+    if file_option == "See an example":
+        uploaded_file = "example_data.csv"
+        df = load_data(uploaded_file)
+    else:
+        uploaded_file = st.file_uploader("Choose the data file (csv)", type="csv")
+        df = load_data(uploaded_file) if uploaded_file is not None else None
 
 if df is not None:
     df = _normalize_coordinates(df)
+    
+    # Check for plots/subplots columns
+    has_plots_subplots = False
+    if df is not None:
+        if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
+            has_plots_subplots = True
+    
+    # Determine plot options
+    if has_plots_subplots:
+        plots_options = sorted(df["PlotDisplay"].dropna().unique())
+    else:
+        plots_options = df[PLOTID_COL].unique() if (df is not None and PLOTID_COL in df.columns) else []
+        if df is not None and PLOTID_COL not in df.columns and not has_plots_subplots:
+            st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Plot selection is disabled.")
+    
+    with st.sidebar:
+        if len(plots_options) > 0:
+            selected_plot = st.selectbox("Select plot to display:", options=plots_options)
+            # Convert PlotDisplay format ("1 - 1") to PlotID format ("1-1") if needed
+            if has_plots_subplots and " - " in str(selected_plot):
+                plot_id_filtered = selected_plot.replace(" - ", "-")
+            else:
+                plot_id_filtered = selected_plot
+            # Filter dataframe to selected plot
+            df = df[df[PLOTID_COL] == plot_id_filtered]
     
     try:
         colors = assign_colors(df[SPECIES_COL].unique())
@@ -134,5 +151,5 @@ if df is not None:
         st.error(f"Data error: {e}")
     except Exception as e:
         st.error(f"Error during plotting: {e}. Refer to the troubleshooting section.")
-else:
-    st.warning("Data could not be loaded. Check integrity of file.")
+    else:
+        st.warning("Data could not be loaded. Check integrity of file.")

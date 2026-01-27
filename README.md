@@ -13,4 +13,4 @@ The app is built to run within streamlit but the code for producing matplotlib f
 
 The app is hosted at https://gaulttreeplots.streamlit.app/ and will run on any javascript-enabled browser. 
 
-Made by Aidan Maddock. Contact me at aidanmaddock6604@gmail.com
+Made by Aidan Maddock. Contact me at aidanlnmaddock@gmail.com

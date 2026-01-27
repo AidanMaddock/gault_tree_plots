@@ -7,7 +7,7 @@ import pandas as pd
 from config import (
     DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
     PLOT_SIZE_METERS, DBH_MARKER_SCALE,
-    PLOTLY_WIDTH_WIDE, PLOTLY_HEIGHT_WIDE, COORD_X_ALIASES, COORD_Y_ALIASES
+    PLOTLY_WIDTH_WIDE, PLOTLY_HEIGHT_WIDE, COORD_X_ALIASES, COORD_Y_ALIASES, TREEID_COL
 )
 
 def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
@@ -24,58 +24,25 @@ def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def get_dbh_history(df: pd.DataFrame, tree_id: str) -> Tuple[List[float], List[int]]:
-    """Retrieve DBH measurements and years for a specific tree.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tree data with TreeID, Year, and DBH columns
-    tree_id : str
-        Identifier for the tree
-        
-    Returns
-    -------
-    tuple
-        (list of DBH values, list of years)
-    """
-    tree_data = df[df["TreeID"] == tree_id].sort_values("Year")
+    """Retrieve DBH history for a specific tree identified by tree_id."""
+    tree_data = df[df[TREEID_COL] == tree_id].sort_values("Year")
     return list(tree_data[DIAMETER_COL]), list(tree_data["Year"])
 
 def prepare_plot_data(df: pd.DataFrame, year: int) -> pd.DataFrame:
-    """Prepare tree data for plotting, including historical DBH data.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Raw tree data
-    year : int
-        Year to filter for current display
-        
-    Returns
-    -------
-    pd.DataFrame
-        Prepared data with TreeID and DBH history for hover information
-    """
+    """Prepare tree data for plotting, including historical DBH data."""
     df = _normalize_coordinates(df)
-    df['TreeID'] = df['X'].astype(str) + "_" + df['Y'].astype(str)
+    df[TREEID_COL] = df['X'].astype(str) + "_" + df['Y'].astype(str)
 
     df_year = df[df['Year'] == year]
-    history = df.groupby("TreeID").apply(
+    history = df.groupby(TREEID_COL).apply(
         lambda group: group.sort_values("Year")[["Year", DIAMETER_COL]].values.tolist()
     ).to_dict()
     
     df_year = df_year.copy()
-    df_year["customdata"] = df_year["TreeID"].map(history)
+    df_year["customdata"] = df_year[TREEID_COL].map(history)
     return df_year
 
 def plot_with_hover_line(df_year: pd.DataFrame) -> None:
-    """Create interactive scatter plot with DBH history on hover.
-    
-    Parameters
-    ----------
-    df_year : pd.DataFrame
-        Tree data for specific year with customdata field containing history
-    """
     fig = go.Figure()
 
     for _, row in df_year.iterrows():
@@ -90,7 +57,7 @@ def plot_with_hover_line(df_year: pd.DataFrame) -> None:
             mode='markers',
             marker=dict(size=row[DIAMETER_COL] * DBH_MARKER_SCALE, color='blue', opacity=0.7),
             hovertemplate=
-            f'<b>TreeID: {row["TreeID"]}</b><br>' +
+            f'<b>StandardID: {row[TREEID_COL]}</b><br>' +
             'X: %{x}, Y: %{y}<br>' +
             f'{DIAMETER_COL}: ' + '%{marker.size:.1f}<br><br>' +
             f'{DIAMETER_COL} over Years:<br>' +
@@ -110,15 +77,7 @@ def plot_with_hover_line(df_year: pd.DataFrame) -> None:
 
 
 def plot_interactive(df: pd.DataFrame, year: int) -> None:
-    """Create interactive scatter plot using Plotly.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tree data containing species, DBH, status, crown class info
-    year : int
-        Year to filter and display
-    """
+
     df = _normalize_coordinates(df)
     df_year = df[df['Year'] == year]
     

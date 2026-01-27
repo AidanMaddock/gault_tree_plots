@@ -4,6 +4,7 @@ from collections import defaultdict
 import itertools
 import pandas as pd
 from typing import Optional, Dict, Any
+from matplotlib.lines import Line2D
 
 from config import (
     DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
@@ -14,29 +15,28 @@ from config import (
 
 @st.cache_data
 def load_data(filelike) -> Optional[pd.DataFrame]:
-    """Load and prepare CSV data for tree plot analysis.
-    
-    Parameters
-    ----------
-    filelike : file-like object
-        CSV file uploaded via Streamlit
-        
-    Returns
-    -------
-    pd.DataFrame or None
-        Cleaned DataFrame with standardized column names and parsed dates,
-        or None if loading fails
-    """
     if filelike is not None:
         try:
             df = pd.read_csv(filelike)
             df.columns = df.columns.str.strip()
+            if "TreeStatus" in df.columns and "Status" not in df.columns:
+                df.rename(columns={"TreeStatus": "Status"}, inplace=True)
+            if "TreeID" in df.columns and "StandardID" not in df.columns:
+                df.rename(columns={"TreeID": "StandardID"}, inplace=True)
 
             if DATE_COL in df.columns:
                 df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors='coerce', dayfirst=False)
                 df[YEAR_COL] = df[DATE_COL].dt.year
+            elif "YearInv" in df.columns:
+                df[YEAR_COL] = pd.to_numeric(df["YearInv"], errors='coerce').astype('int64')
             else:
-                st.warning("No 'Date' column found. Year-based filtering will not be available.")
+                st.warning("No date/year column found. Year-based filtering will not be available.")
+
+            if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
+                plots_col = "Plots" if "Plots" in df.columns else "Plot"
+                subplots_col = "Subplots" if "Subplots" in df.columns else "SubPlot"
+                df["PlotID"] = df[plots_col].astype(str) + "-" + df[subplots_col].astype(str)
+                df["PlotDisplay"] = df[plots_col].astype(str) + " - " + df[subplots_col].astype(str)
 
             st.success("File successfully uploaded and read.")
             return df
@@ -47,18 +47,6 @@ def load_data(filelike) -> Optional[pd.DataFrame]:
 
 
 def assign_colors(species_list) -> Dict[Any, str]:
-    """Assign consistent colors to species for plotting.
-    
-    Parameters
-    ----------
-    species_list : iterable
-        List of species identifiers
-        
-    Returns
-    -------
-    defaultdict
-        Mapping of species to color, with fallback to matplotlib color cycle
-    """
     color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
     used = set(KNOWN_SPECIES_COLORS.values())
     color_cycle = (c for c in color_cycle if c not in used)
@@ -77,24 +65,7 @@ def assign_colors(species_list) -> Dict[Any, str]:
     return defaultdict(lambda: next(color_cycle), mapping)
 
 def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year: int) -> str:
-    """Create matplotlib scatter plot of trees colored by specified attribute.
     
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing tree data with X, Y, DBH columns
-    species_colors : dict
-        Mapping of species/attribute values to colors
-    plotting_group : str
-        Column name to color by (e.g., 'Species', 'Status')
-    year : int
-        Year to filter data by
-        
-    Returns
-    -------
-    str
-        Filename of saved plot image
-    """
     if YEAR_COL not in df.columns:
         raise ValueError(f"DataFrame must contain '{YEAR_COL}' column")
     if plotting_group not in df.columns:
@@ -106,9 +77,20 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
     if df_year.empty:
         raise ValueError(f"No data found for year {year}")
     
-    for sp, group in df_year.groupby(plotting_group):
-        ax.scatter(group["X"], group["Y"], s=group[DIAMETER_COL] * DBH_MARKER_SCALE, 
-                   c=species_colors[sp], label=sp, marker='o', alpha=0.8)
+    # Filter out rows with missing required columns for plotting
+    df_year = df_year.dropna(subset=["X", "Y", DIAMETER_COL, plotting_group])
+    
+    if df_year.empty:
+        raise ValueError(f"No data found for year {year} with complete X, Y, {DIAMETER_COL}, and {plotting_group} values")
+    
+    for sp, group in df_year.groupby(plotting_group, dropna=True):
+        if not group.empty and len(group) > 0:
+            # Ensure all values are numeric and not NaN
+            valid_mask = group[DIAMETER_COL].notna() & group["X"].notna() & group["Y"].notna()
+            if valid_mask.sum() > 0:
+                group_valid = group[valid_mask]
+                ax.scatter(group_valid["X"], group_valid["Y"], s=group_valid[DIAMETER_COL] * DBH_MARKER_SCALE, 
+                           c=species_colors[sp], label=sp, marker='o', alpha=0.8)
     
     ax.legend()
     ax.grid(True, which='both', linestyle=DEFAULT_GRID_STYLE, linewidth=DEFAULT_GRID_WIDTH)
@@ -123,10 +105,21 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
     ax.set_title(f'Tree Plot by {plotting_group}, {year}, Scaled by DBH')
 
     marker_sizes = [dbh * DBH_MARKER_SCALE for dbh in LEGEND_DBH_SIZES]
-    [plt.scatter([], [], s=size, color='gray', label=f"{dbh} cm", alpha=0.6)
-     for dbh, size in zip(LEGEND_DBH_SIZES, marker_sizes)]
-
-    ax.legend(title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
+    dbh_legend_elements = [Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', 
+                                  markersize=size**0.5, label=f"{dbh} cm", alpha=0.6)
+                           for dbh, size in zip(LEGEND_DBH_SIZES, marker_sizes)]
+    
+    # Get existing legend handles handling empty case
+    existing_handles, existing_labels = ax.get_legend_handles_labels()
+    all_handles = existing_handles + dbh_legend_elements
+    
+    if len(all_handles) > 0:
+        ax.legend(handles=all_handles, 
+                  title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
+    else:
+        # Fallback if no legend elements
+        ax.legend(handles=dbh_legend_elements, 
+                  title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     st.pyplot(fig)
     fn = 'tree_plot.png'
