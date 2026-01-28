@@ -42,11 +42,11 @@ def load_data(filelike) -> Optional[pd.DataFrame]:
                 df["PlotID"] = df[plots_col].astype(str) + "-" + df[subplots_col].astype(str)
                 df["PlotDisplay"] = df[plots_col].astype(str) + " - " + df[subplots_col].astype(str)
             elif "Plot" in df.columns and "PlotID" not in df.columns:
-                # If only Plot column exists (no SubPlot), rename it to PlotID
-                df.rename(columns={"Plot": "PlotID"}, inplace=True)
+                # If only Plot column exists (no SubPlot), use it as PlotID but keep as numeric
+                df["PlotID"] = pd.to_numeric(df["Plot"], errors='coerce').fillna(df["Plot"])
             elif "Plots" in df.columns and "PlotID" not in df.columns:
-                # If only Plots column exists (no Subplots), rename it to PlotID
-                df.rename(columns={"Plots": "PlotID"}, inplace=True)
+                # If only Plots column exists (no Subplots), use it as PlotID but keep as numeric
+                df["PlotID"] = pd.to_numeric(df["Plots"], errors='coerce').fillna(df["Plots"])
 
             st.success("File successfully uploaded and read.")
             return df
@@ -70,8 +70,9 @@ def normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
             df.rename(columns={alias: 'Y'}, inplace=True)
             break
 
+    # Only apply string normalization to PlotDisplay column (not PlotID which should remain numeric)
     for col in df.columns:
-        if 'plot' in col.lower():
+        if col == "PlotDisplay":  # Only process PlotDisplay, not PlotID
             df[col] = df[col].astype(str).str.replace('\u00A0', ' ')  # NBSP -> space
             df[col] = df[col].str.strip()
             df[col] = df[col].str.replace(r'\s*-\s*', '-', regex=True)
