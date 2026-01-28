@@ -17,6 +17,8 @@ with col1:
     st.dataframe(dfex.set_index(dfex.columns[0]), height = 200)
     st.write(TROUBLESHOOTING_TEXT)
 
+    st.write("Created by Aidan Maddock, 2026")
+
 with col3: 
     st.header("Species Codes")
     st.dataframe(dfdi.set_index(dfdi.columns[0]), height = 200)
