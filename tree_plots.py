@@ -11,7 +11,7 @@ from config import (
     DIAMETER_COL, SPECIES_COL, STATUS_COL, CROWN_COL,
     KNOWN_SPECIES_COLORS, PLOT_SIZE_METERS, PLOT_CENTER, DBH_MARKER_SCALE,
     LEGEND_DBH_SIZES, MATPLOTLIB_FIGSIZE_SQUARE, DEFAULT_GRID_STYLE, DEFAULT_GRID_WIDTH,
-    DATE_COL, YEAR_COL
+    DATE_COL, YEAR_COL, COORD_X_ALIASES, COORD_Y_ALIASES
 )
 
 def load_data(filelike) -> Optional[pd.DataFrame]:
@@ -47,6 +47,29 @@ def load_data(filelike) -> Optional[pd.DataFrame]:
             st.error(f"Error reading file: {e}")
             return None
     return None
+
+
+def normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename coordinate columns to 'X' and 'Y' if needed."""
+    df = df.copy()
+
+    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
+    for alias in COORD_X_ALIASES:
+        if alias in df.columns and 'X' not in df.columns:
+            df.rename(columns={alias: 'X'}, inplace=True)
+            break
+    for alias in COORD_Y_ALIASES:
+        if alias in df.columns and 'Y' not in df.columns:
+            df.rename(columns={alias: 'Y'}, inplace=True)
+            break
+
+    for col in df.columns:
+        if 'plot' in col.lower():
+            df[col] = df[col].astype(str).str.replace('\u00A0', ' ')  # NBSP -> space
+            df[col] = df[col].str.strip()
+            df[col] = df[col].str.replace(r'\s*-\s*', '-', regex=True)
+    
+    return df
 
 
 def assign_colors(species_list) -> Dict[Any, str]:

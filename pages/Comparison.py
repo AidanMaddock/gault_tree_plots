@@ -3,7 +3,7 @@ st.set_page_config(layout="wide", page_title="Comparison")
 import matplotlib.pyplot as plt
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from tree_plots import load_data, plot_data, assign_colors
+from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors
 import numpy as np
 from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments
 import plotly.graph_objects as go
@@ -16,29 +16,6 @@ from config import (
     PLOTID_COL, PLOT_AREA_M2, MATPLOTLIB_FIGSIZE_WIDE,
     COORD_X_ALIASES, COORD_Y_ALIASES
 )
-
-def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
-    """Rename coordinate columns to 'X' and 'Y' if needed."""
-    df = df.copy()
-
-    
-    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').astype('Int64')
-    for alias in COORD_X_ALIASES:
-        if alias in df.columns and 'X' not in df.columns:
-            df.rename(columns={alias: 'X'}, inplace=True)
-            break
-    for alias in COORD_Y_ALIASES:
-        if alias in df.columns and 'Y' not in df.columns:
-            df.rename(columns={alias: 'Y'}, inplace=True)
-            break
-
-    for col in df.columns:
-        if 'plot' in col.lower():
-            df[col] = df[col].astype(str).str.replace('\u00A0', ' ')  # NBSP -> space
-            df[col] = df[col].str.strip()
-            df[col] = df[col].str.replace(r'\s*-\s*', '-', regex=True)
-    
-    return df
 
 st.title("Tree Plot Comparison")
 
@@ -98,14 +75,14 @@ with st.sidebar:
 
 
 if uploaded_file is not None and df is not None:
-    df = _normalize_coordinates(df)
+    df = normalize_coordinates(df)
     df["X"] = pd.to_numeric(df["X"], errors="coerce")
     df["Y"] = pd.to_numeric(df["Y"], errors="coerce")
 
     df["X"] = df["X"] % PLOT_SIZE_METERS
     df["Y"] = df["Y"] % PLOT_SIZE_METERS
     if df_control is not None:
-        df_control = _normalize_coordinates(df_control)
+        df_control = normalize_coordinates(df_control)
         df_control["X"] = pd.to_numeric(df_control["X"], errors="coerce")
         df_control["Y"] = pd.to_numeric(df_control["Y"], errors="coerce")
         df_control["X"] = df_control["X"] % PLOT_SIZE_METERS
