@@ -14,6 +14,51 @@ from config import (
     DATE_COL, YEAR_COL, COORD_X_ALIASES, COORD_Y_ALIASES
 )
 
+def load_species_dict(filepath: str = "Data/TreeDict.csv") -> Dict[str, str]:
+    """Load species abbreviation to common name mapping from TreeDict.csv.
+    
+    Parameters
+    ----------
+    filepath : str
+        Path to the TreeDict.csv file
+        
+    Returns
+    -------
+    Dict[str, str]
+        Mapping from abbreviation to common name. Returns empty dict if file not found.
+    """
+    try:
+        tree_dict = pd.read_csv(filepath)
+        # Create mapping from Abbreviation to Common Name
+        mapping = dict(zip(tree_dict["Abbreviation"], tree_dict["Common Name"]))
+        return mapping
+    except (FileNotFoundError, KeyError, pd.errors.ParserError):
+        # If file doesn't exist or is malformed, return empty dict (will use abbreviations)
+        return {}
+
+
+def load_status_dict(filepath: str = "Data/StatusDict.csv") -> Dict[str, str]:
+    """Load status code to description mapping from StatusDict.csv.
+    
+    Parameters
+    ----------
+    filepath : str
+        Path to the StatusDict.csv file
+        
+    Returns
+    -------
+    Dict[str, str]
+        Mapping from code to status description. Returns empty dict if file not found.
+    """
+    try:
+        status_dict = pd.read_csv(filepath)
+        # Create mapping from Code to Status Description
+        mapping = dict(zip(status_dict["Code"], status_dict["Status Description"]))
+        return mapping
+    except (FileNotFoundError, KeyError, pd.errors.ParserError):
+        # If file doesn't exist or is malformed, return empty dict (will use codes)
+        return {}
+
 def load_data(filelike) -> Optional[pd.DataFrame]:
     if filelike is not None:
         try:
@@ -98,12 +143,18 @@ def assign_colors(species_list) -> Dict[Any, str]:
 
     return defaultdict(lambda: next(color_cycle), mapping)
 
-def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year: int) -> str:
+def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year: int, species_dict: Optional[Dict[str, str]] = None, status_dict: Optional[Dict[str, str]] = None) -> str:
     
     if YEAR_COL not in df.columns:
         raise ValueError(f"DataFrame must contain '{YEAR_COL}' column")
     if plotting_group not in df.columns:
         raise ValueError(f"DataFrame must contain '{plotting_group}' column")
+    
+    # Load species and status dictionaries if not provided
+    if species_dict is None:
+        species_dict = load_species_dict()
+    if status_dict is None:
+        status_dict = load_status_dict()
     
     try:
         year_int = int(year)
@@ -140,8 +191,15 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
             valid_mask = group[DIAMETER_COL].notna() & group["X"].notna() & group["Y"].notna()
             if valid_mask.sum() > 0:
                 group_valid = group[valid_mask]
+                # Use full description if available based on plotting_group
+                if plotting_group == SPECIES_COL:
+                    label = species_dict.get(sp, sp)
+                elif plotting_group == STATUS_COL:
+                    label = status_dict.get(sp, sp)
+                else:
+                    label = sp
                 ax.scatter(group_valid["X"], group_valid["Y"], s=group_valid[DIAMETER_COL] * DBH_MARKER_SCALE, 
-                           c=species_colors[sp], label=sp, marker='o', alpha=0.8)
+                           c=species_colors[sp], label=label, marker='o', alpha=0.8)
     
     ax.legend()
     ax.grid(True, which='both', linestyle=DEFAULT_GRID_STYLE, linewidth=DEFAULT_GRID_WIDTH)

@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 st.set_page_config(layout="wide", page_title="Comparison")
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors
+from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors, load_species_dict, load_status_dict
 from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments, diversity_plot, dbh_plot
 
 from config import (
@@ -75,40 +75,40 @@ with st.sidebar:
         if df is not None and PLOTID_COL not in df.columns and not has_plots_subplots:
             st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Plot selection is disabled.")
 
-    compare = st.checkbox("Compare two plots?", value = False)
+    
     use_control = False
     df_control = None
     control_plots_options = []
     control_selected = None
     has_control_plots_subplots = False
     
-    if compare: 
-        use_control = st.checkbox("Compare with a control file", value=False)
+    
+    use_control = st.checkbox("Compare with a control file", value=False)
 
-        if use_control:
-            control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
-            df_control = load_data(control_file) if control_file is not None else None
-            
-            if df_control is not None:
-                if ("Plots" in df_control.columns and "Subplots" in df_control.columns) or ("Plot" in df_control.columns and "SubPlot" in df_control.columns):
-                    has_control_plots_subplots = True
-            
-            if has_control_plots_subplots:
-                control_plots_options = sorted(df_control["PlotDisplay"].dropna().unique())
-            else:
-                control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
-                if df_control is not None and PLOTID_COL not in df_control.columns and not has_control_plots_subplots:
-                    st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Control plot selection is disabled.")
-
-        if use_control:
-            plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
-            control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
+    if use_control:
+        control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
+        df_control = load_data(control_file) if control_file is not None else None
+        
+        if df_control is not None:
+            if ("Plots" in df_control.columns and "Subplots" in df_control.columns) or ("Plot" in df_control.columns and "SubPlot" in df_control.columns):
+                has_control_plots_subplots = True
+        
+        if has_control_plots_subplots:
+            control_plots_options = sorted(df_control["PlotDisplay"].dropna().unique())
         else:
-            plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
+            control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
+            if df_control is not None and PLOTID_COL not in df_control.columns and not has_control_plots_subplots:
+                st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Control plot selection is disabled.")
+
+    if use_control:
+        plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
+        control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
     else:
-        plots = st.multiselect("Select plot(s) to view:", options=plots_options)
+        plots = st.multiselect("Select plot(s) to view:", options=plots_options, max_selections=2)
 
     plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
+    
+    use_mapped_names = st.checkbox("Use full species/status names in legends", value=True)
 
 
 if uploaded_file is not None and df is not None:
@@ -134,7 +134,7 @@ if uploaded_file is not None and df is not None:
     colors = assign_colors(all_species)
     
     # Single plot cross-section view
-    if not compare and len(plots) == 1:
+    if len(plots) == 1:
         selected_plot = plots[0]
         
         # Convert PlotDisplay format ("1 - 1") to PlotID format ("1-1") if needed
@@ -149,7 +149,7 @@ if uploaded_file is not None and df is not None:
         if df_subset.empty:
             st.warning(f"No data found for plot {selected_plot}")
         else:
-            st.title(f"Cross Section - Plot {selected_plot}")
+            st.subheader(f"Cross Section - Plot {selected_plot}")
             
             try:
                 # Year selection
@@ -166,21 +166,23 @@ if uploaded_file is not None and df is not None:
                     
                     if year is not None:
                         year_subset = df_subset[df_subset["Year"] == year]
-                        fn = plot_data(year_subset, colors, selected_plotting_group, year)
+                        species_dict = load_species_dict() if use_mapped_names else {}
+                        status_dict = load_status_dict() if use_mapped_names else {}
+                        fn = plot_data(year_subset, colors, selected_plotting_group, year, species_dict=species_dict, status_dict=status_dict)
                     
                     # Species statistics and DBH
                     col1, col2, col3 = st.columns([1, 0.5, 1])
                     
                     species_counts = df_subset[SPECIES_COL].value_counts().sort_values(ascending=False)
                     with col2:
-                        st.metric("Total trees:", len(df_subset))
+                        st.metric("Total trees:", len(year_subset))
                         st.metric("Unique Species", len(species_counts))  
                         st.metric("Mean DBH (cm)", f"{df_subset[DIAMETER_COL].mean():.1f}")
                         st.metric("Median DBH (cm)", f"{df_subset[DIAMETER_COL].median():.1f}") 
                         top_species, top_count = species_counts.index[0], species_counts.iloc[0]
                         st.metric(
                             "Dominant Species (%)",
-                            f"{100 * top_count / len(df_subset):.1f}%"
+                            f"{top_species}:{100 * top_count / len(df_subset):.1f}%"
                         )
                                             
                     with col1:
@@ -253,7 +255,9 @@ if uploaded_file is not None and df is not None:
                         subset1 = subset[subset["Year"] == year1]
                     st.subheader(f"Plot {label_id}")
                     if subset1 is not None and not subset1.empty:
-                        wn = plot_data(subset1, colors, plotting_group, year=year1)
+                        species_dict = load_species_dict() if use_mapped_names else {}
+                        status_dict = load_status_dict() if use_mapped_names else {}
+                        plot_data(subset1, colors, plotting_group, year=year1, species_dict=species_dict, status_dict=status_dict)
 
                     if year1 is not None and 'wn' in locals():
                                 with open(wn, "rb") as img:
@@ -276,7 +280,9 @@ if uploaded_file is not None and df is not None:
                         subset2 = subset[subset["Year"] == year2]
                     st.subheader(f"Plot {label_id}")
                     if subset2 is not None and not subset2.empty:
-                        rn = plot_data(subset2, colors, plotting_group, year=year2)
+                        species_dict = load_species_dict() if use_mapped_names else {}
+                        status_dict = load_status_dict() if use_mapped_names else {}
+                        plot_data(subset2, colors, plotting_group, year=year2, species_dict=species_dict, status_dict=status_dict)
 
                     if year2 is not None and 'rn' in locals():
                                 with open(rn, "rb") as img:
