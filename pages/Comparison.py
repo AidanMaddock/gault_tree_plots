@@ -1,15 +1,17 @@
 import streamlit as st
-st.set_page_config(layout="wide", page_title="Comparison")
-import matplotlib.pyplot as plt
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors
 import numpy as np
-from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 from typing import Optional, List
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+st.set_page_config(layout="wide", page_title="Comparison")
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors
+from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments
 
 from config import (
     DIAMETER_COL, PLOT_SIZE_METERS, SPECIES_COL, STATUS_COL, CROWN_COL,
@@ -17,6 +19,7 @@ from config import (
     COORD_X_ALIASES, COORD_Y_ALIASES
 )
 
+# Title of page 
 st.title("Tree Plot Comparison")
 
 with st.sidebar:
@@ -33,7 +36,6 @@ with st.sidebar:
     has_plots_subplots = False
     
     if df is not None:
-        
         if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
             has_plots_subplots = True
     
@@ -44,32 +46,34 @@ with st.sidebar:
         if df is not None and PLOTID_COL not in df.columns and not has_plots_subplots:
             st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Plot selection is disabled.")
 
-    use_control = st.checkbox("Compare with a control file", value=False)
-    df_control = None
-    control_plots_options = []
-    control_selected = None
-    has_control_plots_subplots = False
+    compare = st.checkbox("Compare two plots?", value = False)
+    if compare: 
+        use_control = st.checkbox("Compare with a control file", value=False)
+        df_control = None
+        control_plots_options = []
+        control_selected = None
+        has_control_plots_subplots = False
 
-    if use_control:
-        control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
-        df_control = load_data(control_file) if control_file is not None else None
-        
-        if df_control is not None:
-            if ("Plots" in df_control.columns and "Subplots" in df_control.columns) or ("Plot" in df_control.columns and "SubPlot" in df_control.columns):
-                has_control_plots_subplots = True
-        
-        if has_control_plots_subplots:
-            control_plots_options = sorted(df_control["PlotDisplay"].dropna().unique())
+        if use_control:
+            control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
+            df_control = load_data(control_file) if control_file is not None else None
+            
+            if df_control is not None:
+                if ("Plots" in df_control.columns and "Subplots" in df_control.columns) or ("Plot" in df_control.columns and "SubPlot" in df_control.columns):
+                    has_control_plots_subplots = True
+            
+            if has_control_plots_subplots:
+                control_plots_options = sorted(df_control["PlotDisplay"].dropna().unique())
+            else:
+                control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
+                if df_control is not None and PLOTID_COL not in df_control.columns and not has_control_plots_subplots:
+                    st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Control plot selection is disabled.")
+
+        if use_control:
+            plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
+            control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
         else:
-            control_plots_options = df_control[PLOTID_COL].unique() if (df_control is not None and PLOTID_COL in df_control.columns) else []
-            if df_control is not None and PLOTID_COL not in df_control.columns and not has_control_plots_subplots:
-                st.warning(f"Control CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Control plot selection is disabled.")
-
-    if use_control:
-        plots = st.multiselect("Select plot to compare (main file)", options=plots_options, max_selections=1)
-        control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
-    else:
-        plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
+            plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
 
     plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
 

@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 
 
-dfex = pd.read_csv("example_data.csv")
+dfex = pd.read_csv("Data/example_data.csv")
 
 st.write("CSV must contain columns in order as below:")
 st.dataframe(dfex.set_index(dfex.columns[0]))

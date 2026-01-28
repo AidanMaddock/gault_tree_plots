@@ -1,9 +1,15 @@
 import pandas as pd
 import numpy as np
 import math
-from typing import Optional, Tuple
+import matplotlib.pyplot as plt
+import streamlit as st 
+from typing import Optional, Tuple, Dict, List
+from tree_plots import assign_colors
 
-from config import DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS, TREEID_COL, PLOTID_COL
+from config import (
+    DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS, TREEID_COL, PLOTID_COL, MATPLOTLIB_FIGSIZE_SQUARE,
+    MATPLOTLIB_FIGSIZE_WIDE
+)
 
 def basal_area_m2(dbh_cm: float) -> float:
     """Calculate basal area in square meters from DBH.
@@ -24,23 +30,9 @@ def basal_area_m2(dbh_cm: float) -> float:
     r = dbh_m / 2.0
     return math.pi * (r ** 2)
 
-
+    """Compute aggregated statistics by year for a plot."""
 def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
-    """Compute aggregated statistics by year for a plot.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tree data with Year, PlotID, Species, and DBH columns
-    plot_id : str
-        Plot identifier to filter by, or None if df is already filtered
-        
-    Returns
-    -------
-    dict or None
-        Dictionary with 'counts_df', 'basal_area_df', 'species_df' DataFrames,
-        or None if plot has no data or insufficient time-series data
-    """
+
     if df is None:
         return None
     
@@ -134,55 +126,44 @@ def compute_dbh_increments(df: pd.DataFrame, plot_id: str) -> Optional[np.ndarra
 
     return np.array(increments) if len(increments) > 0 else None
 
-
-def t_statistic_independent(a: np.ndarray, b: np.ndarray) -> Tuple[Optional[float], Optional[float]]:
-    """Compute Welch t-statistic for independent samples.
-    
-    Parameters
-    ----------
-    a, b : np.ndarray
-        Two samples to compare
-        
-    Returns
-    -------
-    tuple
-        (t-statistic, degrees of freedom) or (None, None) if invalid
-    """
-    if a is None or b is None or len(a) < MIN_SAMPLES_FOR_STATS or len(b) < MIN_SAMPLES_FOR_STATS:
-        return None, None
-    
-    n1 = len(a)
-    n2 = len(b)
-    m1 = float(np.nanmean(a))
-    m2 = float(np.nanmean(b))
-    s1 = float(np.nanvar(a, ddof=1))
-    s2 = float(np.nanvar(b, ddof=1))
-    denom = math.sqrt(s1 / n1 + s2 / n2)
-    
-    if denom == 0:
-        return None, None
-    
-    t = (m1 - m2) / denom
-    num = (s1 / n1 + s2 / n2) ** 2
-    den = (s1 ** 2) / (n1 ** 2 * (n1 - 1)) + (s2 ** 2) / (n2 ** 2 * (n2 - 1))
-    
-    df = num / den if den != 0 else None
-    return t, df
-
-
+"""Count unique species in dataset."""
 def diversity(data: Optional[pd.DataFrame]) -> int:
-    """Count unique species in dataset.
-    
-    Parameters
-    ----------
-    data : pd.DataFrame or None
-        Tree data with Species column
-        
-    Returns
-    -------
-    int
-        Number of unique species
-    """
+
     if data is None or data.empty:
         return 0
     return len(data[SPECIES_COL].unique())
+
+"""Create pie chart of species diversity."""
+@st.cache_data
+def diversity_plot(species_counts: pd.Series, colourwheel: Dict) -> None:
+    fig, ax = plt.subplots(figsize=MATPLOTLIB_FIGSIZE_SQUARE)
+    species_counts.plot(kind="pie", ax=ax, color=colourwheel)
+    ax.set_title("Tree Species Diversity")
+    ax.set_xlabel("Species")
+    plt.xticks(rotation=45, ha='right')
+    st.pyplot(fig)
+
+    """Create histogram of DBH distribution by species."""
+def dbh_plot(df: pd.DataFrame, selected_species: List[str], numbins: int, 
+             colourwheel: Dict, colourtype: bool) -> None:
+    colors = plt.cm.tab20.colors
+    color_map = {sp: colors[i % len(colors)] for i, sp in enumerate(selected_species)}
+    fig, ax = plt.subplots(figsize=MATPLOTLIB_FIGSIZE_WIDE)
+    
+    for sp in selected_species:
+        subset = df[df[SPECIES_COL] == sp][DIAMETER_COL].dropna()
+        if len(subset) == 0:
+            continue
+        
+        if colourtype:
+            ax.hist(subset, bins=numbins, alpha=0.6, label=sp, color=colourwheel[sp])
+            ax.legend(title="Species")
+        else:
+            ax.hist(subset, bins=numbins, alpha=0.6, label=sp, color="black")
+
+    ax.set_title("DBH Distribution by Species")
+    ax.set_xlabel(f"{DIAMETER_COL} (cm)")
+    ax.set_ylabel("Number of Trees")
+    st.pyplot(fig)
+    
+    
