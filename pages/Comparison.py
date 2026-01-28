@@ -11,13 +11,44 @@ st.set_page_config(layout="wide", page_title="Comparison")
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from tree_plots import load_data, normalize_coordinates, plot_data, assign_colors
-from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments
+from tree_statistics import compute_plot_year_stats, diversity, compute_dbh_increments, diversity_plot, dbh_plot
 
 from config import (
     DIAMETER_COL, PLOT_SIZE_METERS, SPECIES_COL, STATUS_COL, CROWN_COL,
-    PLOTID_COL, PLOT_AREA_M2, MATPLOTLIB_FIGSIZE_WIDE,
-    COORD_X_ALIASES, COORD_Y_ALIASES
+    PLOTID_COL, PLOT_AREA_M2, MATPLOTLIB_FIGSIZE_WIDE, MATPLOTLIB_FIGSIZE_SQUARE,
+    COORD_X_ALIASES, COORD_Y_ALIASES, WELCOME_TEXT, DEFAULT_BINS, MIN_BINS, MAX_BINS,
+    DEFAULT_YEAR_TEXT_FORMAT
 )
+
+
+def dbh_app(df: pd.DataFrame, colors: dict) -> None:
+    """Display DBH histogram and statistics for a dataset."""
+    species_list = sorted(df[SPECIES_COL].dropna().unique())
+    species_options = ["Select All"] + list(species_list)
+    selected = st.multiselect("Choose species:", options=species_options, default=["Select All"], key="dbh_species")
+
+    if "Select All" in selected:
+        selected_species = list(species_list)
+    else:
+        selected_species = selected
+
+    filtered_df = df[df[SPECIES_COL].isin(selected_species)]
+    
+    num_bins = st.slider("Number of bins for DBH histogram", min_value=MIN_BINS, max_value=MAX_BINS, value=DEFAULT_BINS, key="dbh_bins")
+    all_dbh = df[DIAMETER_COL].dropna()
+    
+    if len(all_dbh) == 0:
+        st.warning("No DBH data available.")
+        return
+    
+    bin_edges = np.histogram_bin_edges(all_dbh, bins=num_bins)
+    one_colour = st.checkbox("Use Species-Specific Colouring", value=True, key="dbh_color")
+    dbh_plot(filtered_df, selected_species, bin_edges, colors, one_colour)
+    
+    if selected_species:
+        avg_dbh = filtered_df[DIAMETER_COL].mean()
+        st.write(f"Average {DIAMETER_COL}: {avg_dbh:.2f} cm")
+
 
 # Title of page 
 st.title("Tree Plot Comparison")
@@ -47,12 +78,14 @@ with st.sidebar:
             st.warning(f"Uploaded CSV does not contain a '{PLOTID_COL}' column or Plot/SubPlot columns. Plot selection is disabled.")
 
     compare = st.checkbox("Compare two plots?", value = False)
+    use_control = False
+    df_control = None
+    control_plots_options = []
+    control_selected = None
+    has_control_plots_subplots = False
+    
     if compare: 
         use_control = st.checkbox("Compare with a control file", value=False)
-        df_control = None
-        control_plots_options = []
-        control_selected = None
-        has_control_plots_subplots = False
 
         if use_control:
             control_file = st.file_uploader("Upload a control file to compare against", type="csv", key="control_file")
@@ -74,6 +107,8 @@ with st.sidebar:
             control_selected = st.selectbox("Select the control plot to compare against", options=control_plots_options) if df_control is not None else None
         else:
             plots = st.multiselect("Select two plots to compare:", options=plots_options, max_selections=2)
+    else:
+        plots = st.multiselect("Select plot(s) to view:", options=plots_options)
 
     plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
 
@@ -100,7 +135,78 @@ if uploaded_file is not None and df is not None:
     all_species = sorted(set(all_species))
     colors = assign_colors(all_species)
     
-    if (not use_control and len(plots) == 2) or (use_control and len(plots) == 1 and control_selected is not None):
+    # Single plot cross-section view
+    if not compare and len(plots) == 1:
+        selected_plot = plots[0]
+        
+        # Convert PlotDisplay format ("1 - 1") to PlotID format ("1-1") if needed
+        if has_plots_subplots and " - " in str(selected_plot):
+            plot_id_filtered = selected_plot.replace(" - ", "-")
+        else:
+            plot_id_filtered = selected_plot
+        
+        # Filter dataframe to selected plot
+        df_subset = df[df[PLOTID_COL] == plot_id_filtered].copy()
+        
+        if df_subset.empty:
+            st.warning(f"No data found for plot {selected_plot}")
+        else:
+            st.title(f"Cross Section - Plot {selected_plot}")
+            
+            try:
+                # Year selection
+                if "Year" in df_subset.columns:  
+                    year_list = sorted(df_subset["Year"].dropna().unique())
+                    top_col1, top_col2 = st.columns([2, 1])
+                    
+                    with top_col1:
+                        selected_plotting_group = st.selectbox("Pick attribute to plot trees by", 
+                                                   [SPECIES_COL, STATUS_COL, CROWN_COL], key="single_plot_group")
+                    
+                    with top_col2:
+                        year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
+                    
+                    if year is not None:
+                        year_subset = df_subset[df_subset["Year"] == year]
+                        fn = plot_data(year_subset, colors, selected_plotting_group, year)
+                    
+                    # Species statistics and DBH
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    
+                    species_counts = df_subset[SPECIES_COL].value_counts().sort_values(ascending=False)
+                    with col1:
+                        st.metric("Total trees:", len(df_subset))
+                        st.metric("Unique Species", len(species_counts))
+                        diversity_val = diversity(df_subset)
+                        st.metric("Species Richness", diversity_val)
+                    
+                    with col2:
+                        with st.expander("Species Composition"):
+                            diversity_plot(species_counts, colors)
+                    
+                    with col3:
+                        with st.expander("DBH Analysis", expanded=True):
+                            dbh_app(df_subset, colors)
+                    
+                    # Download button
+                    col_dl1, col_dl2, col_dl3 = st.columns([1, 2, 1])
+                    with col_dl1:
+                        if year is not None and 'fn' in locals():
+                            with open(fn, "rb") as img:
+                                st.download_button(
+                                    label="Download Figure",
+                                    data=img,
+                                    file_name=fn,
+                                    mime="image/png",
+                                    key="single_download"
+                                )
+                else:
+                    st.warning("No 'Year' column found in data.")
+            except Exception as e:
+                st.error(f"Error processing plot: {str(e)}")
+    
+    # Comparison view (two plots)
+    elif (not use_control and len(plots) == 2) or (use_control and len(plots) == 1 and control_selected is not None):
         col1, col2 = st.columns(2)
 
         datasets = []
