@@ -133,8 +133,12 @@ if uploaded_file is not None and df is not None:
     all_species = sorted(set(all_species))
     colors = assign_colors(all_species)
     
-    # Single plot cross-section view
-    if len(plots) == 1:
+    # Initialize subset variables for later use
+    subset1 = None
+    subset2 = None
+    
+    # Single plot cross-section view (only if NOT comparing with control)
+    if len(plots) == 1 and not (use_control and control_selected is not None):
         selected_plot = plots[0]
         
         # Convert PlotDisplay format ("1 - 1") to PlotID format ("1-1") if needed
@@ -329,7 +333,7 @@ if uploaded_file is not None and df is not None:
                 rows=4, cols=2,
                 specs=[[{"colspan": 2}, None], [{"colspan": 2}, None], [{}, {}], [{"colspan": 2}, None]],
                 subplot_titles=("Tree density over time", "Basal area (m²) over time", 
-                               f"Species composition: {plotA}", f"Species composition: {plotB}", "DBH Distribution")
+                               f"Species composition: Plot {plotA}", f"Species composition: Plot {plotB}", "DBH Distribution")
             )
 
             a_counts = stats_a['counts_df'].sort_values('Year')
