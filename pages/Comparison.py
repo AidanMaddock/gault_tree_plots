@@ -6,7 +6,6 @@ from typing import Optional, List
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from interactive import plot_interactive
 
 st.set_page_config(layout="wide", page_title="Comparison")
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
