@@ -1,4 +1,4 @@
-Date,PlotID,Quadrat,TreeID,CoorX,CoorY,Species,Status,DBH,CrownClass,Notes
+Date,Plot,Quadrat,TreeID,CoorX,CoorY,Species,Status,DBH,CrownClass,Notes
 07/09/2026,1,1,3534,0.2,0.9,AS,AS,11.49,2,
 07/09/2026,1,1,3535,1.9,4.4,FA,AS,13.89,3,
 07/09/2026,1,1,3536,6.9,4.4,OV,AS,11.4,3,

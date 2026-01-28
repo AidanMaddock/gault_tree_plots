@@ -144,6 +144,7 @@ def diversity_plot(species_counts: pd.Series, colourwheel: Dict) -> None:
     st.pyplot(fig)
 
     """Create histogram of DBH distribution by species."""
+
 def dbh_plot(df: pd.DataFrame, selected_species: List[str], numbins: int, 
              colourwheel: Dict, colourtype: bool) -> None:
     colors = plt.cm.tab20.colors
@@ -165,5 +166,61 @@ def dbh_plot(df: pd.DataFrame, selected_species: List[str], numbins: int,
     ax.set_xlabel(f"{DIAMETER_COL} (cm)")
     ax.set_ylabel("Number of Trees")
     st.pyplot(fig)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import List, Dict
+
+def dbh_plot(df: pd.DataFrame, selected_species: List[str], numbins: int, 
+             colourwheel: Dict, colourtype: bool) -> None:
     
-    
+    # Prepare per-species arrays (preserve order of selected_species)
+    data_by_species = []
+    labels = []
+    for sp in selected_species:
+        vals = df[df[SPECIES_COL] == sp][DIAMETER_COL].dropna().values
+        if vals.size > 0:
+            data_by_species.append(vals)
+            labels.append(sp)
+
+    if not data_by_species:
+        st.warning("No DBH data for selected species.")
+        return
+
+    # Shared bin edges computed from the combined selected data
+    all_dbh = np.concatenate(data_by_species)
+    bin_edges = np.histogram_bin_edges(all_dbh, bins=numbins)
+
+    # Build color list: use colourwheel if colourtype True, else black for all
+    # Fallback palette if a species is missing in colourwheel
+    default_palette = plt.cm.tab20.colors
+    plot_colors = []
+    if colourtype:
+        for i, sp in enumerate(labels):
+            if sp in colourwheel and colourwheel[sp] is not None:
+                plot_colors.append(colourwheel[sp])
+            else:
+                plot_colors.append(default_palette[i % len(default_palette)])
+    else:
+        plot_colors = ["black"] * len(labels)
+
+    # Plot stacked histogram in one call so bars stack correctly
+    fig, ax = plt.subplots(figsize=MATPLOTLIB_FIGSIZE_WIDE)
+    ax.hist(
+        data_by_species,
+        bins=bin_edges,
+        stacked=True,
+        label=labels,
+        color=plot_colors,
+        edgecolor="white",
+        linewidth=0.6,
+        alpha=0.8
+    )
+
+    ax.set_title("DBH Distribution by Species")
+    ax.set_xlabel(f"{DIAMETER_COL} (cm)")
+    ax.set_ylabel("Number of Trees")
+    ax.legend(title="Species", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    plt.tight_layout()
+    st.pyplot(fig)

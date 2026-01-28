@@ -20,7 +20,6 @@ from config import (
     DEFAULT_YEAR_TEXT_FORMAT
 )
 
-
 def dbh_app(df: pd.DataFrame, colors: dict) -> None:
     """Display DBH histogram and statistics for a dataset."""
     species_list = sorted(df[SPECIES_COL].dropna().unique())
@@ -49,15 +48,14 @@ def dbh_app(df: pd.DataFrame, colors: dict) -> None:
         avg_dbh = filtered_df[DIAMETER_COL].mean()
         st.write(f"Average {DIAMETER_COL}: {avg_dbh:.2f} cm")
 
-
 # Title of page 
-st.title("Tree Plot Comparison")
-
+st.title("Tree Plot Grapher")
+st.write(WELCOME_TEXT)
 with st.sidebar:
     file_option = st.radio("Data source:", ["Upload your data", "See an example"], horizontal=True)
     
     if file_option == "See an example":
-        uploaded_file = "example_data.csv"
+        uploaded_file = "Data/example_data.csv"
         df = load_data(uploaded_file)
         st.info("Showing example data from example_data.csv")
     else:
@@ -171,17 +169,22 @@ if uploaded_file is not None and df is not None:
                         fn = plot_data(year_subset, colors, selected_plotting_group, year)
                     
                     # Species statistics and DBH
-                    col1, col2, col3 = st.columns([1, 1, 2])
+                    col1, col2, col3 = st.columns([1, 0.5, 1])
                     
                     species_counts = df_subset[SPECIES_COL].value_counts().sort_values(ascending=False)
-                    with col1:
-                        st.metric("Total trees:", len(df_subset))
-                        st.metric("Unique Species", len(species_counts))
-                        diversity_val = diversity(df_subset)
-                        st.metric("Species Richness", diversity_val)
-                    
                     with col2:
-                        with st.expander("Species Composition"):
+                        st.metric("Total trees:", len(df_subset))
+                        st.metric("Unique Species", len(species_counts))  
+                        st.metric("Mean DBH (cm)", f"{df_subset[DIAMETER_COL].mean():.1f}")
+                        st.metric("Median DBH (cm)", f"{df_subset[DIAMETER_COL].median():.1f}") 
+                        top_species, top_count = species_counts.index[0], species_counts.iloc[0]
+                        st.metric(
+                            "Dominant Species (%)",
+                            f"{100 * top_count / len(df_subset):.1f}%"
+                        )
+                                            
+                    with col1:
+                        with st.expander("Species Composition", expanded = True):
                             diversity_plot(species_counts, colors)
                     
                     with col3:

@@ -51,9 +51,10 @@ KNOWN_SPECIES_COLORS = {
 }
 
 # UI text
-WELCOME_TEXT = "Upload a CSV with tree data (species, DBH) to generate a plot. This page focuses on cross-sectional analysis; to compare different plots, select the 'Comparison' page in the upper left."
-COMPARISON_DESCRIPTION = "Select plots to compare tree distributions and statistics over time."
+WELCOME_TEXT = "Upload a CSV with tree data (species, DBH) to generate a plot. Select plots to compare tree distributions and statistics over time."
 DEFAULT_YEAR_TEXT_FORMAT = "Year: {}"
+TROUBLESHOOTING_TEXT = "Make sure that date is in format DD/MM/YYYY and that numeric values are not stored as text or include extra spaces." \
+" Plot / Subplot columns are optional. For acceptable aliases for columns, check config.py in the repo"
 
 # Default settings
 DEFAULT_BINS = 10
