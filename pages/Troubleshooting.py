@@ -5,13 +5,11 @@ from config import TROUBLESHOOTING_TEXT
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-
-
 dfex = pd.read_csv("Data/example_data.csv")
 dfdi = pd.read_csv("Data/TreeDict.csv")
 dfst = pd.read_csv("Data/StatusDict.csv")
 
-col1, col2, col3 = st.columns([1,0.2,1])
+col1, col2, col3 = st.columns([1,0.1,1])
 
 with col1:
     st.header("Example Data Format")

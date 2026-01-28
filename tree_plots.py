@@ -35,11 +35,18 @@ def load_data(filelike) -> Optional[pd.DataFrame]:
             else:
                 st.warning("No date/year column found. Year-based filtering will not be available.")
 
+            # Handle Plot/Subplot columns
             if ("Plots" in df.columns and "Subplots" in df.columns) or ("Plot" in df.columns and "SubPlot" in df.columns):
                 plots_col = "Plots" if "Plots" in df.columns else "Plot"
                 subplots_col = "Subplots" if "Subplots" in df.columns else "SubPlot"
                 df["PlotID"] = df[plots_col].astype(str) + "-" + df[subplots_col].astype(str)
                 df["PlotDisplay"] = df[plots_col].astype(str) + " - " + df[subplots_col].astype(str)
+            elif "Plot" in df.columns and "PlotID" not in df.columns:
+                # If only Plot column exists (no SubPlot), rename it to PlotID
+                df.rename(columns={"Plot": "PlotID"}, inplace=True)
+            elif "Plots" in df.columns and "PlotID" not in df.columns:
+                # If only Plots column exists (no Subplots), rename it to PlotID
+                df.rename(columns={"Plots": "PlotID"}, inplace=True)
 
             st.success("File successfully uploaded and read.")
             return df
