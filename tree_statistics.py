@@ -7,7 +7,7 @@ from typing import Optional, Tuple, Dict, List
 from tree_plots import assign_colors
 
 from config import (
-    DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS, TREEID_COL, PLOTID_COL, MATPLOTLIB_FIGSIZE_SQUARE,
+    DIAMETER_COL, SPECIES_COL, MIN_SAMPLES_FOR_STATS, STATUS_COL, TREEID_COL, PLOTID_COL, MATPLOTLIB_FIGSIZE_SQUARE,
     MATPLOTLIB_FIGSIZE_WIDE
 )
 
@@ -67,10 +67,18 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
     species['Proportion'] = species['Count'] / yearly_total
     species['PlotID'] = plot_id if plot_id is not None else 'Plot'
 
+    status = (
+        plot_df.groupby(['Year', STATUS_COL]).size().reset_index(name='Count')
+    )
+    yearly_total = status.groupby('Year')['Count'].transform('sum')
+    status['Proportion'] = status['Count'] / yearly_total
+    status['PlotID'] = plot_id if plot_id is not None else 'Plot'
+
     return {
         'counts_df': counts,
         'basal_area_df': basal_area,
         'species_df': species,
+        'status_df': status,
     }
 
 

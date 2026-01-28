@@ -133,6 +133,14 @@ if uploaded_file is not None and df is not None:
     all_species = sorted(set(all_species))
     colors = assign_colors(all_species)
     
+    all_status = []
+    if STATUS_COL in df.columns:
+        all_status.extend(list(df[STATUS_COL].dropna().unique()))
+    if df_control is not None and STATUS_COL in df_control.columns:
+        all_status.extend(list(df_control[STATUS_COL].dropna().unique()))
+    all_status = sorted(set(all_status))
+    colorsstat = assign_colors(all_status)
+
     # Initialize subset variables for later use
     subset1 = None
     subset2 = None
@@ -261,17 +269,9 @@ if uploaded_file is not None and df is not None:
                     if subset1 is not None and not subset1.empty:
                         species_dict = load_species_dict() if use_mapped_names else {}
                         status_dict = load_status_dict() if use_mapped_names else {}
-                        plot_data(subset1, colors, plotting_group, year=year1, species_dict=species_dict, status_dict=status_dict)
+                        wn = plot_data(subset1, colors, plotting_group, year=year1, species_dict=species_dict, status_dict=status_dict)
 
-                    if year1 is not None and 'wn' in locals():
-                                with open(wn, "rb") as img:
-                                    st.download_button(
-                                        label="Download Figure",
-                                        data=img,
-                                        file_name=wn,
-                                        mime="image/png",
-                                        key="compare_download"
-                                    )
+                    
             else:
                 with col2:
                     if subset.empty:
@@ -286,18 +286,9 @@ if uploaded_file is not None and df is not None:
                     if subset2 is not None and not subset2.empty:
                         species_dict = load_species_dict() if use_mapped_names else {}
                         status_dict = load_status_dict() if use_mapped_names else {}
-                        plot_data(subset2, colors, plotting_group, year=year2, species_dict=species_dict, status_dict=status_dict)
+                        rn = plot_data(subset2, colors, plotting_group, year=year2, species_dict=species_dict, status_dict=status_dict)
 
-                    if year2 is not None and 'rn' in locals():
-                                with open(rn, "rb") as img:
-                                    st.download_button(
-                                        label="Download Figure",
-                                        data=img,
-                                        file_name=rn,
-                                        mime="image/png",
-                                        key="comp_download"
-                                    )
-
+                    
     #metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
     
     if (not use_control and len(plots) == 2) or (use_control and len(plots) == 1 and control_selected is not None):
@@ -330,11 +321,27 @@ if uploaded_file is not None and df is not None:
             st.warning("One or both selected plots do not have time-based data for statistics.")
         else:
             fig = make_subplots(
-                rows=4, cols=2,
-                specs=[[{"colspan": 2}, None], [{"colspan": 2}, None], [{}, {}], [{"colspan": 2}, None]],
-                subplot_titles=("Tree density over time", "Basal area (m²) over time", 
-                               f"Species composition: Plot {plotA}", f"Species composition: Plot {plotB}", "DBH Distribution")
-            )
+                rows=5, cols=2,
+                specs=[
+                    [{"colspan": 2}, None],   # row 1: density
+                    [{"colspan": 2}, None],   # row 2: basal area
+                    [{}, {}],                 # row 3: species
+                    [{}, {}],                  # row 4: status
+                    [{"colspan": 2}, None],   # row 5: DBH histogram
+                ],
+                subplot_titles=(
+                    "Tree density over time",
+                    "Basal area (m²) over time",
+                    f"Species composition: Plot {plotA}",
+                    f"Species composition: Plot {plotB}",
+                    f"Status composition: Plot {plotA}",
+                    f"Status composition: Plot {plotB}",
+                ),
+            )   
+            
+                
+               
+            
 
             a_counts = stats_a['counts_df'].sort_values('Year')
             b_counts = stats_b['counts_df'].sort_values('Year')
@@ -367,6 +374,25 @@ if uploaded_file is not None and df is not None:
                                         showlegend=False, stackgroup='two', mode='none', 
                                         fillcolor=species_mapping.get(sp)), row=3, col=2)
 
+            status_mapping = {s: colors[s] for s in (all_status if len(all_status) > 0 else df[STATUS_COL].dropna().unique())}
+
+            a_status = stats_a['status_df']
+            b_status = stats_b['status_df']
+
+            piv_as = a_status.pivot(index='Year', columns=STATUS_COL, values='Proportion').fillna(0).sort_index()
+            piv_bs = b_status.pivot(index='Year', columns=STATUS_COL, values='Proportion').fillna(0).sort_index()
+
+            for ap in piv_as.columns:
+                fig.add_trace(go.Scatter(x=piv_as.index, y=piv_as[ap], name=str(ap), legendgroup=str(ap), 
+                                        showlegend=False, stackgroup='one', mode='none', 
+                                        fillcolor=status_mapping.get(ap)), row=4, col=1)
+
+            for ap in piv_bs.columns:
+                fig.add_trace(go.Scatter(x=piv_bs.index, y=piv_bs[ap], name=str(ap), legendgroup=str(ap), 
+                                        showlegend=False, stackgroup='two', mode='none', 
+                                        fillcolor=status_mapping.get(ap)), row=4, col=2)
+                
+
             fig.update_layout(title_text=f"Comparison Statistics: Plot {plotA} vs {plotB}", height=1000, showlegend=True)
             fig.update_xaxes(title_text='Year', row=3, col=1)
             fig.update_xaxes(title_text='Year', row=3, col=2)
@@ -378,11 +404,11 @@ if uploaded_file is not None and df is not None:
                 if len(all_dbh) > 0:
                     bins = np.histogram_bin_edges(all_dbh, bins='auto')
                     fig.add_trace(go.Histogram(x=subset1[DIAMETER_COL], name=f"{DIAMETER_COL} {plotA}", 
-                                              nbinsx=len(bins)-1, marker_color='rgba(31,119,180,0.6)', opacity=0.7), row=4, col=1)
+                                              nbinsx=len(bins)-1, marker_color='rgba(31,119,180,0.6)', opacity=0.7), row=5, col=1)
                     fig.add_trace(go.Histogram(x=subset2[DIAMETER_COL], name=f"{DIAMETER_COL} {plotB}", 
-                                              nbinsx=len(bins)-1, marker_color='rgba(255,127,14,0.6)', opacity=0.7), row=4, col=1)
-                    fig.update_xaxes(title_text=f'{DIAMETER_COL} (cm)', row=4, col=1)
-                    fig.update_yaxes(title_text='Count', row=4, col=1)
+                                              nbinsx=len(bins)-1, marker_color='rgba(255,127,14,0.6)', opacity=0.7), row=5, col=1)
+                    fig.update_xaxes(title_text=f'{DIAMETER_COL} (cm)', row=5, col=1)
+                    fig.update_yaxes(title_text='Count', row=5, col=1)
 
             st.plotly_chart(fig, use_container_width=True)
 
@@ -444,4 +470,27 @@ if uploaded_file is not None and df is not None:
                 st.metric(label=f"Species richness ({plotB})", value=f"{div_b}")
                 st.metric(label=f"Mean {DIAMETER_COL} increment ({plotB})", value=f"{mean_inc_b:.2f} cm/yr")
 
-
+col1, col2, col3 = st.columns([1,2,1])
+with col1:
+    if uploaded_file is not None:
+        try:
+            if year1 is not None and 'wn' in locals():
+                with open(wn, "rb") as img:
+                    st.download_button(
+                        label="Download Figure 1",
+                        data=img,
+                        file_name=wn,
+                        mime="image/png",
+                        key="compare_download"
+                    )
+            if year2 is not None and 'rn' in locals():
+                with open(rn, "rb") as img:
+                    st.download_button(
+                        label="Download Figure 2",
+                        data=img,
+                        file_name=rn,
+                        mime="image/png",
+                        key="comp_download"
+                    )
+        except:
+            pass

@@ -13,8 +13,8 @@ X_COL = "X"
 Y_COL = "Y"
 
 # Coordinate column aliases (for backward compatibility with uploaded data)
-COORD_X_ALIASES = ["CoorX", "X", "Easting"]
-COORD_Y_ALIASES = ["CoorY", "Y", "Northing"]
+COORD_X_ALIASES = ["CoorX", "X", "Easting", "CorX"]
+COORD_Y_ALIASES = ["CoorY", "Y", "Northing", "CorY"]
 
 # Output paths
 OUTPUT_PATH = "output.png"
@@ -54,7 +54,7 @@ KNOWN_SPECIES_COLORS = {
 WELCOME_TEXT = "Upload a CSV with plot data to generate a figure. Select plots to compare tree distributions and statistics over time."
 DEFAULT_YEAR_TEXT_FORMAT = "Year: {}"
 TROUBLESHOOTING_TEXT = "Make sure that date is in format DD/MM/YYYY and that numeric values are not stored as text or include extra spaces." \
-" Plot / Subplot columns are optional. For acceptable aliases for columns, check config.py in the repo"
+" Plot / Subplot and Quadrat columns are optional. For acceptable aliases for columns, check config.py in the repo"
 
 # Default settings
 DEFAULT_BINS = 10
