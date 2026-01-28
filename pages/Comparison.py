@@ -6,6 +6,7 @@ from typing import Optional, List
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from interactive import plot_interactive
 
 st.set_page_config(layout="wide", page_title="Comparison")
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -250,7 +251,17 @@ if uploaded_file is not None and df is not None:
                         subset1 = subset[subset["Year"] == year1]
                     st.subheader(f"Plot {label_id}")
                     if subset1 is not None and not subset1.empty:
-                        plot_data(subset1, colors, plotting_group, year=year1)
+                        wn = plot_data(subset1, colors, plotting_group, year=year1)
+
+                    if year1 is not None and 'wn' in locals():
+                                with open(wn, "rb") as img:
+                                    st.download_button(
+                                        label="Download Figure",
+                                        data=img,
+                                        file_name=wn,
+                                        mime="image/png",
+                                        key="compare_download"
+                                    )
             else:
                 with col2:
                     if subset.empty:
@@ -263,7 +274,17 @@ if uploaded_file is not None and df is not None:
                         subset2 = subset[subset["Year"] == year2]
                     st.subheader(f"Plot {label_id}")
                     if subset2 is not None and not subset2.empty:
-                        plot_data(subset2, colors, plotting_group, year=year2)
+                        rn = plot_data(subset2, colors, plotting_group, year=year2)
+
+                    if year2 is not None and 'rn' in locals():
+                                with open(rn, "rb") as img:
+                                    st.download_button(
+                                        label="Download Figure",
+                                        data=img,
+                                        file_name=rn,
+                                        mime="image/png",
+                                        key="comp_download"
+                                    )
 
     #metric = st.selectbox("Choose a metric:", ["Tree density", "Basal area", "Species composition", "Survival"])
     
@@ -410,3 +431,5 @@ if uploaded_file is not None and df is not None:
                 st.metric(label=f"Total Basal Area ({plotB})", value=f"{total_ba_b:.2f} m²")
                 st.metric(label=f"Species richness ({plotB})", value=f"{div_b}")
                 st.metric(label=f"Mean {DIAMETER_COL} increment ({plotB})", value=f"{mean_inc_b:.2f} cm/yr")
+
+
