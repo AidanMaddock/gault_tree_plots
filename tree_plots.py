@@ -210,7 +210,7 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
         # Fallback if no legend elements
         ax.legend(handles=dbh_legend_elements, 
                   title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
+    plt.subplots_adjust(right=0.75)
     st.pyplot(fig)
     fn = 'tree_plot.png'
     plt.savefig(fn)
