@@ -167,20 +167,13 @@ if uploaded_file is not None and df is not None:
                 # Year selection
                 if "Year" in df_subset.columns:  
                     year_list = sorted(df_subset["Year"].dropna().unique())
-                    top_col1, top_col2 = st.columns([2, 1])
-                    
-                    with top_col1:
-                        selected_plotting_group = st.selectbox("Pick attribute to plot trees by", 
-                                                   [None, SPECIES_COL, STATUS_COL, CROWN_COL], key="single_plot_group", format_func=lambda x: "No grouping (Grey)" if x is None else x)
-                    
-                    with top_col2:
-                        year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
+                    year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
                     
                     if year is not None:
                         year_subset = df_subset[df_subset["Year"] == year]
                         species_dict = load_species_dict() if use_mapped_names else {}
                         status_dict = load_status_dict() if use_mapped_names else {}
-                        fn = plot_data(year_subset, colors, selected_plotting_group, year, species_dict=species_dict, status_dict=status_dict)
+                        fn = plot_data(year_subset, colors, plotting_group, year, species_dict=species_dict, status_dict=status_dict)
                     
                     # Species statistics and DBH
                     col1, col2, col3 = st.columns([1, 0.5, 1])
