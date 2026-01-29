@@ -16,16 +16,7 @@ from config import (
 
 def load_species_dict(filepath: str = "Data/TreeDict.csv") -> Dict[str, str]:
     """Load species abbreviation to common name mapping from TreeDict.csv.
-    
-    Parameters
-    ----------
-    filepath : str
-        Path to the TreeDict.csv file
-        
-    Returns
-    -------
-    Dict[str, str]
-        Mapping from abbreviation to common name. Returns empty dict if file not found.
+
     """
     try:
         tree_dict = pd.read_csv(filepath)
@@ -39,16 +30,6 @@ def load_species_dict(filepath: str = "Data/TreeDict.csv") -> Dict[str, str]:
 
 def load_status_dict(filepath: str = "Data/StatusDict.csv") -> Dict[str, str]:
     """Load status code to description mapping from StatusDict.csv.
-    
-    Parameters
-    ----------
-    filepath : str
-        Path to the StatusDict.csv file
-        
-    Returns
-    -------
-    Dict[str, str]
-        Mapping from code to status description. Returns empty dict if file not found.
     """
     try:
         status_dict = pd.read_csv(filepath)

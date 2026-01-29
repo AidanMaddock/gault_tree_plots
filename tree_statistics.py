@@ -13,16 +13,6 @@ from config import (
 
 def basal_area_m2(dbh_cm: float) -> float:
     """Calculate basal area in square meters from DBH.
-    
-    Parameters
-    ----------
-    dbh_cm : float
-        Diameter at breast height in centimeters
-        
-    Returns
-    -------
-    float
-        Basal area in square meters
     """
     if dbh_cm is None or pd.isna(dbh_cm):
         return 0.0
@@ -84,18 +74,6 @@ def compute_plot_year_stats(df: pd.DataFrame, plot_id: str) -> Optional[dict]:
 
 def compute_dbh_increments(df: pd.DataFrame, plot_id: str) -> Optional[np.ndarray]:
     """Compute annual DBH increments for trees in a plot.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tree data with PlotID, StandardID, Year, and DBH columns
-    plot_id : str
-        Plot identifier to filter by, or None if df is already filtered
-        
-    Returns
-    -------
-    np.ndarray or None
-        Array of annual increment values (cm/year), or None if insufficient data
     """
     if df is None:
         return None

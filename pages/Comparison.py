@@ -46,7 +46,7 @@ def dbh_app(df: pd.DataFrame, colors: dict) -> None:
     
     if selected_species:
         avg_dbh = filtered_df[DIAMETER_COL].mean()
-        st.write(f"Average {DIAMETER_COL}: {avg_dbh:.2f} cm")
+        st.write(f"Mean {DIAMETER_COL}: {avg_dbh:.2f} cm")
 
 # Title of page 
 st.title("Tree Plot Grapher")
@@ -59,7 +59,7 @@ with st.sidebar:
         df = load_data(uploaded_file)
         st.info("Showing example data from example_data.csv")
     else:
-        uploaded_file = st.file_uploader("Choose a data file containing all data. Must include a PlotID column", type="csv")
+        uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
         df = load_data(uploaded_file) if uploaded_file is not None else None
     
     has_plots_subplots = False
