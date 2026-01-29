@@ -106,7 +106,7 @@ with st.sidebar:
     else:
         plots = st.multiselect("Select plot(s) to view:", options=plots_options, max_selections=2)
 
-    plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL])
+    plotting_group = st.selectbox("Pick attribute to plot trees by", [SPECIES_COL, STATUS_COL, CROWN_COL, None], format_func=lambda x: "No grouping (Grey)" if x is None else x)
     
     use_mapped_names = st.checkbox("Use full species/status names in legends", value=True)
 
@@ -171,7 +171,7 @@ if uploaded_file is not None and df is not None:
                     
                     with top_col1:
                         selected_plotting_group = st.selectbox("Pick attribute to plot trees by", 
-                                                   [SPECIES_COL, STATUS_COL, CROWN_COL], key="single_plot_group")
+                                                   [None, SPECIES_COL, STATUS_COL, CROWN_COL], key="single_plot_group", format_func=lambda x: "No grouping (Grey)" if x is None else x)
                     
                     with top_col2:
                         year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])

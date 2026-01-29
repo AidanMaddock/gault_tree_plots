@@ -124,11 +124,11 @@ def assign_colors(species_list) -> Dict[Any, str]:
 
     return defaultdict(lambda: next(color_cycle), mapping)
 
-def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year: int, species_dict: Optional[Dict[str, str]] = None, status_dict: Optional[Dict[str, str]] = None) -> str:
+def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: Optional[str], year: int, species_dict: Optional[Dict[str, str]] = None, status_dict: Optional[Dict[str, str]] = None) -> str:
     
     if YEAR_COL not in df.columns:
         raise ValueError(f"DataFrame must contain '{YEAR_COL}' column")
-    if plotting_group not in df.columns:
+    if plotting_group is not None and plotting_group not in df.columns:
         raise ValueError(f"DataFrame must contain '{plotting_group}' column")
     
     # Load species and status dictionaries if not provided
@@ -158,7 +158,10 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
         raise ValueError(f"No data found for year {year}")
 
     # Require numeric/finite X,Y,DBH and a valid plotting_group
-    df_year = df_year.dropna(subset=["X", "Y", DIAMETER_COL, plotting_group])
+    required_cols = ["X", "Y", DIAMETER_COL]
+    if plotting_group is not None:
+        required_cols.append(plotting_group)
+    df_year = df_year.dropna(subset=required_cols)
     # also enforce finite numeric values (excludes inf/-inf)
     df_year = df_year[np.isfinite(df_year["X"]) & np.isfinite(df_year["Y"]) & np.isfinite(df_year[DIAMETER_COL])]
 
@@ -166,21 +169,29 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
         st.warning(f"No data found for year {year} with numeric X, Y, and {DIAMETER_COL} after coercion.")
         raise ValueError(f"No data found for year {year} with complete X, Y, {DIAMETER_COL}, and {plotting_group} values")
 
-    for sp, group in df_year.groupby(plotting_group, dropna=True):
-        if not group.empty and len(group) > 0:
-            # Ensure all values are numeric and not NaN
-            valid_mask = group[DIAMETER_COL].notna() & group["X"].notna() & group["Y"].notna()
-            if valid_mask.sum() > 0:
-                group_valid = group[valid_mask]
-                # Use full description if available based on plotting_group
-                if plotting_group == SPECIES_COL:
-                    label = species_dict.get(sp, sp)
-                elif plotting_group == STATUS_COL:
-                    label = status_dict.get(sp, sp)
-                else:
-                    label = sp
-                ax.scatter(group_valid["X"], group_valid["Y"], s=group_valid[DIAMETER_COL] * DBH_MARKER_SCALE, 
-                           c=species_colors[sp], label=label, marker='o', alpha=0.8)
+    if plotting_group is None:
+        # Plot all trees in grey without grouping
+        valid_mask = df_year[DIAMETER_COL].notna() & df_year["X"].notna() & df_year["Y"].notna()
+        if valid_mask.sum() > 0:
+            df_valid = df_year[valid_mask]
+            ax.scatter(df_valid["X"], df_valid["Y"], s=df_valid[DIAMETER_COL] * DBH_MARKER_SCALE, 
+                       c='grey', label='All trees', marker='o', alpha=0.8)
+    else:
+        for sp, group in df_year.groupby(plotting_group, dropna=True):
+            if not group.empty and len(group) > 0:
+                # Ensure all values are numeric and not NaN
+                valid_mask = group[DIAMETER_COL].notna() & group["X"].notna() & group["Y"].notna()
+                if valid_mask.sum() > 0:
+                    group_valid = group[valid_mask]
+                    # Use full description if available based on plotting_group
+                    if plotting_group == SPECIES_COL:
+                        label = species_dict.get(sp, sp)
+                    elif plotting_group == STATUS_COL:
+                        label = status_dict.get(sp, sp)
+                    else:
+                        label = sp
+                    ax.scatter(group_valid["X"], group_valid["Y"], s=group_valid[DIAMETER_COL] * DBH_MARKER_SCALE, 
+                               c=species_colors[sp], label=label, marker='o', alpha=0.8)
     
     ax.legend()
     ax.grid(True, which='both', linestyle=DEFAULT_GRID_STYLE, linewidth=DEFAULT_GRID_WIDTH)
@@ -192,7 +203,8 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
     ax.set_yticks(range(0, PLOT_SIZE_METERS + 1, 1))
     ax.set_xlabel('Meters (x)')
     ax.set_ylabel('Meters (y)')
-    ax.set_title(f'Tree Plot by {plotting_group}, {year}, Scaled by DBH')
+    title_group = plotting_group if plotting_group is not None else 'No grouping'
+    ax.set_title(f'Tree Plot by {title_group}, {year}, Scaled by DBH')
 
     marker_sizes = [dbh * DBH_MARKER_SCALE for dbh in LEGEND_DBH_SIZES]
     dbh_legend_elements = [Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', 
@@ -203,13 +215,14 @@ def plot_data(df: pd.DataFrame, species_colors: Dict, plotting_group: str, year:
     existing_handles, existing_labels = ax.get_legend_handles_labels()
     all_handles = existing_handles + dbh_legend_elements
     
+    legend_title = plotting_group if plotting_group is not None else 'DBH (cm)'
     if len(all_handles) > 0:
         ax.legend(handles=all_handles, 
-                  title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
+                  title=legend_title, bbox_to_anchor=(1.05, 1), loc='upper left')
     else:
         # Fallback if no legend elements
         ax.legend(handles=dbh_legend_elements, 
-                  title=plotting_group, bbox_to_anchor=(1.05, 1), loc='upper left')
+                  title=legend_title, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.subplots_adjust(right=0.75)
     st.pyplot(fig)
     fn = 'tree_plot.png'
