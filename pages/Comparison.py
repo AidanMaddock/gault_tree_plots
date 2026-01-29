@@ -167,7 +167,7 @@ if uploaded_file is not None and df is not None:
                 # Year selection
                 if "Year" in df_subset.columns:  
                     year_list = sorted(df_subset["Year"].dropna().unique())
-                    year = st.pills("Pick Year to Plot Data", year_list, default=year_list[0])
+                    year = st.pills("Select year to display", year_list, default=year_list[0])
                     
                     if year is not None:
                         year_subset = df_subset[df_subset["Year"] == year]
@@ -255,7 +255,7 @@ if uploaded_file is not None and df is not None:
                         year1 = None
                     else:
                         available_years = sorted(subset["Year"].dropna().unique())
-                        year1 = st.selectbox("Select year to display", options=available_years, key=1)
+                        year1 = st.pills("Select year to display", options=available_years, key=1, default = available_years[0] if available_years else None)
                     if year1:
                         subset1 = subset[subset["Year"] == year1]
                     st.subheader(f"Plot {label_id}")
@@ -272,7 +272,7 @@ if uploaded_file is not None and df is not None:
                         year2 = None
                     else:
                         available_years = sorted(subset["Year"].dropna().unique())
-                        year2 = st.selectbox("Select year to display", options=available_years, key=2)
+                        year2 = st.pills("Select year to display", options=available_years, key=2, default = available_years[0] if available_years else None)
                     if year2:
                         subset2 = subset[subset["Year"] == year2]
                     st.subheader(f"Plot {label_id}")
